@@ -1,0 +1,28 @@
+{
+  "name": "macp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Multi-Agent Cognition Protocol -- real-time cognitive collaboration between AI agents during active execution.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/multiagentcognition/macp.git"
+  },
+  "homepage": "https://macp.dev",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test build/test/**/*.test.js",
+    "server": "node build/src/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "typescript": "^5.9.3"
+  }
+}

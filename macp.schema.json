@@ -1,0 +1,805 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/multiagentcognition/macp/blob/main/macp.schema.json",
+  "title": "MACP - Multi-Agent Cognition Protocol",
+  "description": "Normative specification for the MACP embedded message bus. MACP v1.0 uses a shared SQLite database file as the transport layer. This schema defines the durable data model, SQL operations, pruning rules, and agent prompt template for a SQLite-only deployment.",
+  "type": "object",
+  "$defs": {
+    "Priority": {
+      "title": "Priority",
+      "description": "Message priority levels. Higher value = higher priority. Interrupt deliveries are protected from pruning unless expired or malformed.",
+      "type": "integer",
+      "enum": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "x-enum-names": [
+        "INFO",
+        "ADVISORY",
+        "STEERING",
+        "INTERRUPT"
+      ],
+      "x-string-aliases": {
+        "info": 0,
+        "advisory": 1,
+        "steering": 2,
+        "interrupt": 3
+      }
+    },
+    "AckLevel": {
+      "title": "AckLevel",
+      "description": "Delivery acknowledgment lifecycle.",
+      "type": "string",
+      "enum": [
+        "received",
+        "queued",
+        "processed"
+      ]
+    },
+    "DeliveryState": {
+      "title": "DeliveryState",
+      "description": "Per-recipient delivery lifecycle. queued and surfaced deliveries are both pending and may be returned by poll until acknowledged or expired.",
+      "type": "string",
+      "enum": [
+        "queued",
+        "surfaced",
+        "acknowledged",
+        "expired",
+        "dropped"
+      ]
+    },
+    "SessionState": {
+      "title": "SessionState",
+      "description": "Agent session lifecycle for the SQLite bus.",
+      "type": "string",
+      "enum": [
+        "active",
+        "deregistered"
+      ]
+    },
+    "DestinationType": {
+      "title": "DestinationType",
+      "type": "string",
+      "enum": [
+        "channel",
+        "agent"
+      ],
+      "description": "'channel' for broadcast deliveries, 'agent' for direct deliveries."
+    },
+    "ContentType": {
+      "title": "ContentType",
+      "type": "string",
+      "enum": [
+        "text/plain",
+        "application/json"
+      ],
+      "default": "text/plain"
+    },
+    "ReasonCode": {
+      "title": "ReasonCode",
+      "type": "string",
+      "enum": [
+        "MACP_OK",
+        "MACP_ERR_DESTINATION_UNKNOWN",
+        "MACP_ERR_CHANNEL_NOT_FOUND",
+        "MACP_ERR_QUEUE_FULL_DROP_OLDEST",
+        "MACP_ERR_QUEUE_FULL_REJECT_INCOMING",
+        "MACP_ERR_TTL_EXPIRED",
+        "MACP_ERR_BUDGET_PRUNED",
+        "MACP_ERR_SENDER_NOT_ACTIVE",
+        "MACP_ERR_SENDER_NOT_MEMBER",
+        "MACP_ERR_DELIVERY_NOT_FOUND",
+        "MACP_ERR_DELIVERY_NOT_ACKABLE",
+        "MACP_ERR_SESSION_UNKNOWN"
+      ]
+    },
+    "SenderInfo": {
+      "title": "SenderInfo",
+      "description": "Stored as a JSON string in from_json.",
+      "type": "object",
+      "required": [
+        "agent_id",
+        "session_id",
+        "name"
+      ],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "description": "Stable identifier of the sending agent."
+        },
+        "session_id": {
+          "type": "string",
+          "description": "Current session identifier for the sending agent."
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable name of the sending agent."
+        }
+      },
+      "additionalProperties": false
+    },
+    "MessageContext": {
+      "title": "MessageContext",
+      "description": "Stored as a JSON string in context_json. Used for relevance scoring and byte-budget pruning.",
+      "type": "object",
+      "required": [
+        "relevance_tags",
+        "confidence",
+        "source_references",
+        "payload_byte_size"
+      ],
+      "properties": {
+        "relevance_tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags describing the logical message content."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1,
+          "description": "Sender confidence score."
+        },
+        "source_references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "References supporting the content."
+        },
+        "payload_byte_size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact UTF-8 byte length of content."
+        }
+      },
+      "additionalProperties": false
+    },
+    "AckRequest": {
+      "title": "AckRequest",
+      "description": "Stored as a JSON string in ack_json. request_level is the highest ACK level the sender intends to inspect.",
+      "type": "object",
+      "required": [
+        "request_level"
+      ],
+      "properties": {
+        "request_level": {
+          "$ref": "#/$defs/AckLevel",
+          "default": "received"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Agent": {
+      "title": "Agent",
+      "description": "Stable agent identity. One row per durable agent_id.",
+      "type": "object",
+      "required": [
+        "agent_id",
+        "name",
+        "created_at",
+        "last_registered_at"
+      ],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_registered_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Current connection/session state for an agent.",
+      "type": "object",
+      "required": [
+        "session_id",
+        "agent_id",
+        "capabilities_json",
+        "interest_tags_json",
+        "queue_preferences_json",
+        "state",
+        "registered_at"
+      ],
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "agent_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "capabilities_json": {
+          "type": "string",
+          "description": "JSON string. Default shape: {\"injection_tiers\":[\"tier1_polling\"],\"ack_levels\":[\"received\",\"queued\",\"processed\"],\"max_context_bytes\":16384}"
+        },
+        "interest_tags_json": {
+          "type": "string",
+          "description": "JSON array of interest tags."
+        },
+        "queue_preferences_json": {
+          "type": "string",
+          "description": "JSON string. Default shape: {\"max_pending_messages\":200}"
+        },
+        "state": {
+          "$ref": "#/$defs/SessionState"
+        },
+        "registered_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "Channel": {
+      "title": "Channel",
+      "description": "Row in the channels table. Channels are stable string identifiers in the SQLite deployment.",
+      "type": "object",
+      "required": [
+        "channel_id",
+        "created_at"
+      ],
+      "properties": {
+        "channel_id": {
+          "type": "string",
+          "description": "Channel identifier. Example: 'ops' or 'fraud-ops'."
+        },
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "metadata_json": {
+          "type": "string",
+          "default": "{}"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "active",
+            "closed"
+          ],
+          "default": "active"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ChannelMember": {
+      "title": "ChannelMember",
+      "description": "Current channel membership for an active agent session.",
+      "type": "object",
+      "required": [
+        "channel_id",
+        "agent_id",
+        "session_id",
+        "joined_at"
+      ],
+      "properties": {
+        "channel_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "joined_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "Delivery": {
+      "title": "Delivery",
+      "description": "Per-recipient delivery row. message_id is the logical send identifier. delivery_id is the unique row identifier for this recipient.",
+      "type": "object",
+      "required": [
+        "delivery_id",
+        "message_id",
+        "from_json",
+        "destination_type",
+        "to",
+        "priority",
+        "type",
+        "content",
+        "sequence_number",
+        "context_json",
+        "ack_json",
+        "timestamp",
+        "ttl_seconds",
+        "state",
+        "destination_agent_id"
+      ],
+      "properties": {
+        "delivery_id": {
+          "type": "string",
+          "description": "Unique delivery row identifier. One delivery_id per recipient."
+        },
+        "message_id": {
+          "type": "string",
+          "description": "Logical message identifier shared across all recipient deliveries for the same send."
+        },
+        "channel_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Broadcast deliveries store their channel_id. Direct deliveries store NULL."
+        },
+        "from_json": {
+          "type": "string",
+          "description": "JSON string conforming to SenderInfo."
+        },
+        "destination_type": {
+          "$ref": "#/$defs/DestinationType"
+        },
+        "to": {
+          "type": "string",
+          "description": "For broadcast: channel_id. For direct: target agent_id."
+        },
+        "content_type": {
+          "$ref": "#/$defs/ContentType"
+        },
+        "priority": {
+          "$ref": "#/$defs/Priority"
+        },
+        "type": {
+          "type": "string",
+          "default": "discovery"
+        },
+        "content": {
+          "type": "string"
+        },
+        "sequence_number": {
+          "type": "integer",
+          "description": "Per-destination sequence number allocated atomically."
+        },
+        "context_json": {
+          "type": "string",
+          "description": "JSON string conforming to MessageContext."
+        },
+        "ack_json": {
+          "type": "string",
+          "description": "JSON string conforming to AckRequest."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ttl_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3600
+        },
+        "state": {
+          "$ref": "#/$defs/DeliveryState"
+        },
+        "destination_agent_id": {
+          "type": "string",
+          "description": "Recipient agent_id for this delivery row."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "destination_type": {
+                "const": "channel"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "channel_id"
+            ],
+            "properties": {
+              "channel_id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "destination_type": {
+                "const": "agent"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "channel_id": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AckState": {
+      "title": "AckState",
+      "description": "Per-delivery ACK state.",
+      "type": "object",
+      "required": [
+        "delivery_id",
+        "ack_level",
+        "timestamp"
+      ],
+      "properties": {
+        "delivery_id": {
+          "type": "string"
+        },
+        "ack_level": {
+          "$ref": "#/$defs/AckLevel"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "AuditEvent": {
+      "title": "AuditEvent",
+      "description": "Structured audit event. message_id and delivery_id are nullable because many events are lifecycle-only.",
+      "type": "object",
+      "required": [
+        "event_type",
+        "reason_code",
+        "timestamp"
+      ],
+      "properties": {
+        "event_type": {
+          "type": "string"
+        },
+        "message_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "delivery_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "agent_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "channel_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason_code": {
+          "$ref": "#/$defs/ReasonCode"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metadata_json": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "properties": {
+    "protocol": {
+      "type": "object",
+      "description": "Protocol metadata.",
+      "properties": {
+        "name": {
+          "const": "MACP"
+        },
+        "version": {
+          "const": "1.0"
+        },
+        "transport": {
+          "const": "sqlite"
+        },
+        "min_sqlite_version": {
+          "const": "3.35.0",
+          "description": "Required for RETURNING support used by atomic sequence allocation."
+        }
+      }
+    },
+    "connection": {
+      "type": "object",
+      "title": "Connection Setup",
+      "description": "Execute once when an agent first opens the shared database file.",
+      "properties": {
+        "pragmas": {
+          "type": "object",
+          "properties": {
+            "journal_mode": {
+              "const": "WAL"
+            },
+            "busy_timeout": {
+              "const": 5000
+            },
+            "foreign_keys": {
+              "const": true
+            }
+          }
+        },
+        "schema_ddl": {
+          "type": "string",
+          "description": "Idempotent DDL for the SQLite bus.",
+          "const": "CREATE TABLE IF NOT EXISTS agents (\n    agent_id TEXT PRIMARY KEY,\n    name TEXT NOT NULL,\n    created_at TEXT NOT NULL,\n    last_registered_at TEXT NOT NULL\n);\n\nCREATE TABLE IF NOT EXISTS sessions (\n    session_id TEXT PRIMARY KEY,\n    agent_id TEXT NOT NULL UNIQUE,\n    capabilities_json TEXT NOT NULL,\n    interest_tags_json TEXT NOT NULL,\n    queue_preferences_json TEXT NOT NULL,\n    state TEXT NOT NULL DEFAULT 'active',\n    registered_at TEXT NOT NULL,\n    FOREIGN KEY (agent_id) REFERENCES agents(agent_id)\n);\n\nCREATE TABLE IF NOT EXISTS channels (\n    channel_id TEXT PRIMARY KEY,\n    name TEXT NOT NULL DEFAULT '',\n    metadata_json TEXT NOT NULL DEFAULT '{}',\n    state TEXT NOT NULL DEFAULT 'active',\n    created_at TEXT NOT NULL\n);\n\nCREATE TABLE IF NOT EXISTS channel_members (\n    channel_id TEXT NOT NULL,\n    agent_id TEXT NOT NULL,\n    session_id TEXT NOT NULL,\n    joined_at TEXT NOT NULL,\n    PRIMARY KEY (channel_id, agent_id),\n    FOREIGN KEY (channel_id) REFERENCES channels(channel_id) ON DELETE CASCADE,\n    FOREIGN KEY (agent_id) REFERENCES agents(agent_id) ON DELETE CASCADE,\n    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE\n);\n\nCREATE TABLE IF NOT EXISTS messages (\n    delivery_id TEXT PRIMARY KEY,\n    message_id TEXT NOT NULL,\n    channel_id TEXT,\n    from_json TEXT NOT NULL,\n    destination_type TEXT NOT NULL,\n    \"to\" TEXT NOT NULL,\n    content_type TEXT NOT NULL DEFAULT 'text/plain',\n    priority INTEGER NOT NULL DEFAULT 0,\n    type TEXT NOT NULL DEFAULT 'discovery',\n    content TEXT NOT NULL,\n    sequence_number INTEGER NOT NULL,\n    context_json TEXT NOT NULL,\n    ack_json TEXT NOT NULL,\n    timestamp TEXT NOT NULL,\n    ttl_seconds INTEGER NOT NULL DEFAULT 3600,\n    state TEXT NOT NULL DEFAULT 'queued',\n    destination_agent_id TEXT NOT NULL,\n    created_at TEXT NOT NULL DEFAULT (datetime('now')),\n    FOREIGN KEY (channel_id) REFERENCES channels(channel_id),\n    FOREIGN KEY (destination_agent_id) REFERENCES agents(agent_id)\n);\n\nCREATE TABLE IF NOT EXISTS ack_states (\n    delivery_id TEXT NOT NULL,\n    ack_level TEXT NOT NULL,\n    timestamp TEXT NOT NULL,\n    PRIMARY KEY (delivery_id, ack_level),\n    FOREIGN KEY (delivery_id) REFERENCES messages(delivery_id) ON DELETE CASCADE\n);\n\nCREATE TABLE IF NOT EXISTS audit_log (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    event_type TEXT NOT NULL,\n    message_id TEXT,\n    delivery_id TEXT,\n    agent_id TEXT,\n    channel_id TEXT,\n    reason_code TEXT NOT NULL DEFAULT 'MACP_OK',\n    timestamp TEXT NOT NULL,\n    metadata_json TEXT NOT NULL DEFAULT '{}'\n);\n\nCREATE TABLE IF NOT EXISTS sequence_counters (\n    destination_key TEXT PRIMARY KEY,\n    next_sequence INTEGER NOT NULL DEFAULT 1\n);\n\nCREATE INDEX IF NOT EXISTS idx_messages_message ON messages(message_id);\nCREATE INDEX IF NOT EXISTS idx_messages_state ON messages(state);\nCREATE INDEX IF NOT EXISTS idx_messages_dest ON messages(destination_agent_id, state);\nCREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, state);\nCREATE INDEX IF NOT EXISTS idx_messages_ttl ON messages(timestamp, ttl_seconds);\nCREATE INDEX IF NOT EXISTS idx_ack_states_delivery ON ack_states(delivery_id);\nCREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);\nCREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id);"
+        }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "title": "Protocol Operations",
+      "description": "Exact SQL or semantically equivalent statements for the SQLite bus.",
+      "properties": {
+        "register": {
+          "title": "Register Agent",
+          "description": "Call once per connection before any send/poll activity.",
+          "type": "object",
+          "properties": {
+            "step_1_upsert_agent": {
+              "const": "INSERT INTO agents (agent_id, name, created_at, last_registered_at) VALUES (:agent_id, :name, :now, :now) ON CONFLICT(agent_id) DO UPDATE SET name = excluded.name, last_registered_at = excluded.last_registered_at"
+            },
+            "step_2_cleanup_memberships": {
+              "const": "DELETE FROM channel_members WHERE agent_id = :agent_id"
+            },
+            "step_3_upsert_session": {
+              "const": "INSERT INTO sessions (session_id, agent_id, capabilities_json, interest_tags_json, queue_preferences_json, state, registered_at) VALUES (:session_id, :agent_id, :capabilities_json, :interest_tags_json, :queue_preferences_json, 'active', :now) ON CONFLICT(agent_id) DO UPDATE SET session_id = excluded.session_id, capabilities_json = excluded.capabilities_json, interest_tags_json = excluded.interest_tags_json, queue_preferences_json = excluded.queue_preferences_json, state = 'active', registered_at = excluded.registered_at"
+            },
+            "step_4_audit": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) VALUES ('session.register', NULL, NULL, :agent_id, NULL, 'MACP_OK', :now, '{}')"
+            }
+          }
+        },
+        "join": {
+          "title": "Join Channel",
+          "type": "object",
+          "properties": {
+            "step_1_create_channel": {
+              "const": "INSERT OR IGNORE INTO channels (channel_id, created_at) VALUES (:channel_id, :now)"
+            },
+            "step_2_add_member": {
+              "const": "INSERT OR REPLACE INTO channel_members (channel_id, agent_id, session_id, joined_at) VALUES (:channel_id, :agent_id, :session_id, :now)"
+            },
+            "step_3_discover_peers": {
+              "const": "SELECT cm.agent_id FROM channel_members cm JOIN sessions s ON s.session_id = cm.session_id WHERE cm.channel_id = :channel_id AND cm.agent_id != :agent_id AND s.state = 'active'"
+            },
+            "step_4_audit": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) VALUES ('channel.join', NULL, NULL, :agent_id, :channel_id, 'MACP_OK', :now, '{}')"
+            },
+            "step_0_validate_session": {
+              "const": "SELECT 1 FROM sessions WHERE agent_id = :agent_id AND session_id = :session_id AND state = 'active'",
+              "description": "Validate that the joining agent has an active session. Reject the join with MACP_ERR_SESSION_UNKNOWN if no row is returned."
+            }
+          }
+        },
+        "leave": {
+          "title": "Leave Channel",
+          "type": "object",
+          "properties": {
+            "step_1_remove_member": {
+              "const": "DELETE FROM channel_members WHERE channel_id = :channel_id AND agent_id = :agent_id"
+            },
+            "step_2_audit": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) VALUES ('channel.leave', NULL, NULL, :agent_id, :channel_id, 'MACP_OK', :now, '{}')"
+            }
+          }
+        },
+        "send": {
+          "title": "Send Message",
+          "description": "Send one logical message_id and fan out one delivery_id per recipient. All message content and identifiers MUST be bound as parameters, never string-interpolated into SQL. A logical send MUST execute inside one IMMEDIATE transaction so queue accounting and sequence allocation are atomic under contention. Direct deliveries MUST bind :channel_id = NULL.",
+          "type": "object",
+          "properties": {
+            "step_0_begin_immediate": {
+              "const": "BEGIN IMMEDIATE",
+              "description": "Open one write transaction for the full logical send. For channel sends, validate the channel, enumerate recipients, and perform each per-recipient delivery step inside this transaction. If any later step fails, ROLLBACK instead of COMMIT."
+            },
+            "step_1_validate_channel": {
+              "const": "SELECT 1 FROM channels WHERE channel_id = :channel_id AND state = 'active'",
+              "description": "For broadcast messages only. Reject the send with MACP_ERR_CHANNEL_NOT_FOUND if no row is returned."
+            },
+            "step_2_validate_direct_recipient": {
+              "const": "SELECT 1 FROM sessions WHERE agent_id = :dest_agent_id AND state = 'active'",
+              "description": "For direct messages only. Reject the send with MACP_ERR_DESTINATION_UNKNOWN if no row is returned. Direct deliveries bind :channel_id = NULL and do not require channel membership."
+            },
+            "step_3_get_broadcast_recipients": {
+              "const": "SELECT cm.agent_id FROM channel_members cm JOIN sessions s ON s.session_id = cm.session_id WHERE cm.channel_id = :channel_id AND cm.agent_id != :sender_agent_id AND s.state = 'active'",
+              "description": "For broadcast messages only."
+            },
+            "step_4_read_queue_limit": {
+              "const": "SELECT COALESCE(CAST(json_extract(queue_preferences_json, '$.max_pending_messages') AS INTEGER), 200) AS max_pending_messages FROM sessions WHERE agent_id = :dest_agent_id AND state = 'active'",
+              "description": "Run once per recipient inside the IMMEDIATE transaction. If no row is returned, reject the send with MACP_ERR_DESTINATION_UNKNOWN."
+            },
+            "step_5_count_pending": {
+              "const": "SELECT COUNT(*) AS pending_count FROM messages WHERE destination_agent_id = :dest_agent_id AND state IN ('queued', 'surfaced') AND datetime(timestamp, '+' || ttl_seconds || ' seconds') >= datetime(:now)"
+            },
+            "step_6_select_drop_candidate": {
+              "const": "SELECT delivery_id, priority FROM messages WHERE destination_agent_id = :dest_agent_id AND state = 'queued' AND datetime(timestamp, '+' || ttl_seconds || ' seconds') >= datetime(:now) ORDER BY priority ASC, sequence_number ASC LIMIT 1",
+              "description": "If pending_count >= max_pending_messages, compare the candidate priority to the incoming priority. Only queued deliveries are eligible for eviction. Drop the candidate only when candidate.priority <= incoming priority. Otherwise reject the incoming delivery."
+            },
+            "step_7_mark_dropped": {
+              "const": "UPDATE messages SET state = 'dropped' WHERE delivery_id = :drop_delivery_id AND state = 'queued'",
+              "description": "Run only when overflow policy chooses eviction."
+            },
+            "step_8_audit_drop": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) SELECT 'message.drop', message_id, delivery_id, destination_agent_id, channel_id, 'MACP_ERR_QUEUE_FULL_DROP_OLDEST', :now, :metadata_json FROM messages WHERE delivery_id = :drop_delivery_id AND state = 'dropped'",
+              "description": "Audit the delivery row that was actually evicted. metadata_json MAY include the incoming message_id for correlation."
+            },
+            "step_9_reject_incoming": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) VALUES ('message.reject', :message_id, NULL, :dest_agent_id, :channel_id, 'MACP_ERR_QUEUE_FULL_REJECT_INCOMING', :now, :metadata_json)",
+              "description": "Run when the queue is full and the best drop candidate has a higher priority than the incoming delivery. In that case, do not insert the incoming delivery."
+            },
+            "step_10_allocate_sequence": {
+              "const": "INSERT INTO sequence_counters (destination_key, next_sequence) VALUES (:dest_agent_id, 2) ON CONFLICT(destination_key) DO UPDATE SET next_sequence = next_sequence + 1 RETURNING next_sequence - 1 AS allocated_sequence"
+            },
+            "step_11_insert_delivery": {
+              "const": "INSERT INTO messages (delivery_id, message_id, channel_id, from_json, destination_type, \"to\", content_type, priority, type, content, sequence_number, context_json, ack_json, timestamp, ttl_seconds, state, destination_agent_id) VALUES (:delivery_id, :message_id, :channel_id, :from_json, :destination_type, :to, :content_type, :priority, :type, :content, :sequence_number, :context_json, :ack_json, :now, :ttl, 'queued', :dest_agent_id)"
+            },
+            "step_12_record_queued_ack": {
+              "const": "INSERT OR IGNORE INTO ack_states (delivery_id, ack_level, timestamp) VALUES (:delivery_id, 'queued', :now)"
+            },
+            "step_13_audit_send": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) VALUES ('message.send', :message_id, :delivery_id, :dest_agent_id, :channel_id, 'MACP_OK', :now, '{}')"
+            },
+            "step_14_commit": {
+              "const": "COMMIT",
+              "description": "Commit the logical send only after every recipient-specific delivery step succeeds."
+            },
+            "step_15_rollback": {
+              "const": "ROLLBACK",
+              "description": "Rollback the logical send if validation fails or any recipient-specific step fails."
+            },
+            "step_1a_validate_sender_active": {
+              "const": "SELECT 1 FROM sessions WHERE agent_id = :sender_agent_id AND session_id = :sender_session_id AND state = 'active'",
+              "description": "Validate that the sending agent has an active session. Reject the send with MACP_ERR_SENDER_NOT_ACTIVE if no row is returned."
+            },
+            "step_1b_validate_sender_membership": {
+              "const": "SELECT 1 FROM channel_members cm JOIN sessions s ON s.session_id = cm.session_id WHERE cm.channel_id = :channel_id AND cm.agent_id = :sender_agent_id AND cm.session_id = :sender_session_id AND s.state = 'active'",
+              "description": "For channel messages only. Validate that the sender is an active member of the channel. Reject the send with MACP_ERR_SENDER_NOT_MEMBER if no row is returned."
+            }
+          }
+        },
+        "poll": {
+          "title": "Poll Deliveries",
+          "description": "Retrieve pending deliveries for this agent. queued and surfaced deliveries are both returned to provide simple at-least-once delivery semantics.",
+          "type": "object",
+          "properties": {
+            "step_0_expire_pending": {
+              "const": "UPDATE messages SET state = 'expired' WHERE destination_agent_id = :my_agent_id AND state IN ('queued', 'surfaced') AND datetime(timestamp, '+' || ttl_seconds || ' seconds') < datetime(:now) RETURNING message_id, delivery_id, destination_agent_id, channel_id",
+              "description": "Run at the start of each poll. For every returned row, immediately call step_0b_audit_expired_row."
+            },
+            "step_0b_audit_expired_row": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) VALUES ('message.expire', :message_id, :delivery_id, :agent_id, :channel_id, 'MACP_ERR_TTL_EXPIRED', :now, '{}')",
+              "description": "Write one audit row for each delivery returned by step_0_expire_pending."
+            },
+            "step_1_select": {
+              "const": "SELECT * FROM messages WHERE destination_agent_id = :my_agent_id AND state IN ('queued', 'surfaced') AND priority >= :min_priority AND datetime(timestamp, '+' || ttl_seconds || ' seconds') >= datetime(:now) ORDER BY priority DESC, sequence_number ASC LIMIT :max_messages"
+            },
+            "step_2_apply_context_budget": {
+              "type": "string",
+              "description": "RECOMMENDED. Rank returned deliveries with context_budget_pruning and surface only the subset that fits the receiver's byte budget. Deliveries excluded by this step remain in queued or surfaced state and stay eligible for later polls."
+            },
+            "step_2b_audit_budget_pruned": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) SELECT 'message.prune', message_id, delivery_id, destination_agent_id, channel_id, 'MACP_ERR_BUDGET_PRUNED', :now, :metadata_json FROM messages WHERE delivery_id = :delivery_id AND state IN ('queued', 'surfaced')",
+              "description": "For each delivery excluded from the current poll result by step_2_apply_context_budget, record one audit row. The delivery row itself is not deleted and remains eligible for later polls."
+            },
+            "step_3_mark_surfaced": {
+              "const": "UPDATE messages SET state = 'surfaced' WHERE delivery_id = :delivery_id AND state = 'queued'"
+            },
+            "step_4_record_received_ack": {
+              "const": "INSERT OR IGNORE INTO ack_states (delivery_id, ack_level, timestamp) VALUES (:delivery_id, 'received', :now)"
+            }
+          }
+        },
+        "ack": {
+          "title": "Acknowledge Delivery",
+          "type": "object",
+          "properties": {
+            "step_1_record_processed_ack": {
+              "const": "INSERT OR IGNORE INTO ack_states (delivery_id, ack_level, timestamp) VALUES (:delivery_id, 'processed', :now)"
+            },
+            "step_2_update_state": {
+              "const": "UPDATE messages SET state = 'acknowledged' WHERE delivery_id = :delivery_id AND state IN ('queued', 'surfaced')",
+              "description": "Transition only queued or surfaced deliveries to acknowledged. expired and dropped are terminal states and MUST NOT be rewritten."
+            },
+            "step_3_audit": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) SELECT 'message.ack', message_id, delivery_id, destination_agent_id, channel_id, 'MACP_OK', :now, '{}' FROM messages WHERE delivery_id = :delivery_id",
+              "description": "Write one message.ack audit row only when the delivery transitions into acknowledged state."
+            },
+            "step_0_get_delivery_state": {
+              "const": "SELECT state FROM messages WHERE delivery_id = :delivery_id",
+              "description": "Read the current delivery state before recording processed. Reject with MACP_ERR_DELIVERY_NOT_FOUND if no row is returned. Deliveries in expired or dropped state are not ackable and MUST be rejected with MACP_ERR_DELIVERY_NOT_ACKABLE. Deliveries already acknowledged are idempotent no-ops."
+            }
+          }
+        },
+        "deregister": {
+          "title": "Deregister (Close)",
+          "type": "object",
+          "properties": {
+            "step_1_remove_memberships": {
+              "const": "DELETE FROM channel_members WHERE agent_id = :agent_id"
+            },
+            "step_2_mark_session": {
+              "const": "UPDATE sessions SET state = 'deregistered' WHERE session_id = :session_id"
+            },
+            "step_3_audit": {
+              "const": "INSERT INTO audit_log (event_type, message_id, delivery_id, agent_id, channel_id, reason_code, timestamp, metadata_json) VALUES ('session.deregister', NULL, NULL, :agent_id, NULL, 'MACP_OK', :now, '{}')"
+            }
+          }
+        }
+      }
+    },
+    "context_budget_pruning": {
+      "type": "object",
+      "title": "Context Budget Pruning Algorithm",
+      "description": "Receiver-side pruning for finite byte budgets. Implementations that skip pruning MUST still preserve priority order.",
+      "properties": {
+        "utility_function": {
+          "const": "U(d) = 0.7 * priority_score + 0.2 * tag_relevance + 0.1 * freshness"
+        },
+        "priority_score": {
+          "const": "delivery.priority / 3.0"
+        },
+        "tag_relevance": {
+          "const": "|intersection(delivery.context.relevance_tags, agent.interest_tags)| / |union(delivery.context.relevance_tags, agent.interest_tags)|"
+        },
+        "freshness": {
+          "const": "max(0.0, 1.0 - elapsed_seconds / ttl_seconds)"
+        },
+        "budget_unit": {
+          "const": "bytes"
+        },
+        "payload_cost": {
+          "const": "delivery.context.payload_byte_size"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Interrupt deliveries are considered first and pruned only if expired or malformed.",
+            "Sort remaining deliveries by utility score descending.",
+            "Add deliveries until the byte budget is exhausted.",
+            "For every remaining delivery excluded from the current poll result, record MACP_ERR_BUDGET_PRUNED."
+          ]
+        },
+        "default_budget_bytes": {
+          "const": 16384
+        }
+      }
+    },
+    "agent_prompt_template": {
+      "type": "string",
+      "title": "Agent Prompt Template",
+      "description": "Inject this into an agent's system prompt to make it a SQLite MACP participant. Replace all placeholders. The agent must use prepared statements / bound parameters for every SQL operation.",
+      "const": "--- MACP TEAM PROTOCOL ---\n\nYou are part of a multi-agent team that shares a MACP SQLite bus at {DB_PATH}.\n\nIdentity:\n- agent_id: {AGENT_ID}\n- agent_name: {AGENT_NAME}\n- channel_id: {CHANNEL_ID}\n- role: {ROLE}\n- interest_tags: {TAGS}\n\nRules:\n1. Use SQLite 3.35+.\n2. Execute the PRAGMAs and schema DDL from macp.schema.json exactly once when you open the database.\n3. Always use prepared statements / bound parameters. Never inject agent names, channel IDs, tags, or message content directly into SQL text.\n4. message_id is the logical send identifier. delivery_id is the per-recipient row identifier.\n5. queued ACKs are written automatically when a delivery row is inserted. received ACKs are written automatically when poll returns a delivery. processed ACKs are written only after you act on the delivery.\n6. Poll inside your execution loop. Poll returns both queued and surfaced deliveries. Delivery handling must therefore be idempotent.\n7. expired and dropped deliveries are terminal. Do not mark them acknowledged.\n\nStartup:\n- Register using operations.register with bound parameters for :agent_id, :session_id, :name, :capabilities_json, :interest_tags_json, :queue_preferences_json, and :now.\n- Before joining, validate your session with operations.join.step_0_validate_session.\n- Join your working channel using operations.join.\n\nSending:\n- Generate one logical message_id per send.\n- Wrap the logical send in operations.send.step_0_begin_immediate and either operations.send.step_14_commit or operations.send.step_15_rollback.\n- Validate the sender session with operations.send.step_1a_validate_sender_active before any send.\n- For channel sends, validate the channel with operations.send.step_1_validate_channel, validate sender membership with operations.send.step_1b_validate_sender_membership, and enumerate recipients with operations.send.step_3_get_broadcast_recipients.\n- For direct sends, validate the recipient with operations.send.step_2_validate_direct_recipient and bind :channel_id = NULL.\n- For each recipient, enforce queue limits with operations.send.step_4_read_queue_limit through step_9_reject_incoming.\n- Allocate sequence_number with operations.send.step_10_allocate_sequence.\n- Insert the delivery row with operations.send.step_11_insert_delivery.\n\nPolling:\n- Start poll with operations.poll.step_0_expire_pending.\n- For each row returned by step_0_expire_pending, write operations.poll.step_0b_audit_expired_row.\n- Read deliveries with operations.poll.step_1_select.\n- If you apply byte-budget pruning, audit each omitted delivery with operations.poll.step_2b_audit_budget_pruned.\n- For each returned delivery_id, run operations.poll.step_3_mark_surfaced and operations.poll.step_4_record_received_ack.\n- Use delivery_id when tracking and acknowledging work.\n\nProcessing:\n- Before recording processed, read the state with operations.ack.step_0_get_delivery_state.\n- If the delivery is already acknowledged, treat ack as an idempotent no-op.\n- If the delivery is expired or dropped, reject the ack.\n- After you act on a queued or surfaced delivery, call operations.ack with that delivery_id to record processed and set the delivery state to acknowledged.\n\nClosing:\n- Deregister with operations.deregister so your channel memberships are removed before the session is marked deregistered.\n\nPriority guide:\n- 0 / info: background context.\n- 1 / advisory: actionable findings worth considering.\n- 2 / steering: findings that should change what peers do next.\n- 3 / interrupt: urgent findings that must be handled on the next poll cycle.\n\n--- END MACP PROTOCOL ---"
+    }
+  }
+}
