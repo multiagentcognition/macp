@@ -59,31 +59,31 @@ Every other agent sees this in real time, before it touches a single file.
   done, what problems were found -- without reading every file.
 - **Findings flow up.** An agent discovers a broken API contract and broadcasts
   a steering-priority message. Every other agent adjusts immediately.
-- **Zero infrastructure.** One SQLite file. No server, no broker, no network.
+- **Zero central infrastructure.** One SQLite file. No broker, no network. In
+  MCP mode, each agent uses its own local stdio server process as a wrapper.
 
-Add the MCP server to each agent's config:
+Activate MACP once in the project root:
 
-```json
-{
-  "mcpServers": {
-    "macp": {
-      "command": "node",
-      "args": ["path/to/macp/build/src/server.js"],
-      "env": {
-        "MACP_DB_PATH": "/tmp/project.macp.db",
-        "MACP_AGENT_ID": "agent-1",
-        "MACP_AGENT_NAME": "Frontend Specialist",
-        "MACP_DEFAULT_CHANNEL": "project-x"
-      }
-    }
-  }
-}
+```bash
+npx -y macp-mcp init
 ```
 
-Each agent gets a unique ID. All share the same DB path and channel. From that
-point forward, every agent registers, claims files, broadcasts findings, and
-receives real-time intelligence from every other agent -- all through standard
-MCP tool calls. No custom code, no plugins.
+That one command writes the shared project config, creates project-local MCP
+config files, and scaffolds the instruction files. Hosts that honor one of the
+generated project-local MCP config files can attach MACP for that project
+automatically. Each agent session gets its own MCP server process,
+auto-registers on startup, and auto-joins the default channel. If a host does
+not support project-local config discovery yet, use the generated server entry
+or the manual `server` command. No per-agent SQL or manual register step.
+
+`init` writes:
+
+- `.macp/config.json`
+- `.mcp.json`
+- `.gemini/settings.json`
+- `.vscode/mcp.json`
+- `.cursor/mcp.json`
+- a managed MACP block in `AGENTS.md` and `CLAUDE.md`
 
 Then drop the coordination instructions into your project's agent config file so
 every agent knows the protocol. Copy
@@ -96,10 +96,13 @@ every agent knows the protocol. Copy
 | OpenCode | `AGENTS.md` in project root |
 | Any MCP-capable agent | system prompt or agent instructions |
 
-Replace `{{PROJECT_CHANNEL}}` with your project name. Every agent that reads
-the file will know how to register, announce work, poll for conflicts, and
-communicate breaking changes -- no per-agent setup beyond the MCP server config
-above.
+Replace `{{MACP_CHANNEL}}` with your default coordination channel if you want an
+explicit reminder in the instructions. In simple setups, use the same slug as
+your folder-derived `projectId`. Every agent that reads the file will know how to poll, claim
+files, persist shared memory, use shared task/vault context when enabled,
+announce work, and communicate breaking changes. The repository root also ships
+[AGENTS.md](AGENTS.md) with the same first-party workflow for contributors
+working inside this repo.
 
 This turns a chaotic swarm of independent agents into a coordinated team.
 
@@ -245,6 +248,27 @@ stay pending and should be audited as budget-pruned rather than deleted.
 Each logical send executes inside one SQLite `BEGIN IMMEDIATE` transaction so
 queue enforcement and sequence allocation stay atomic under contention.
 
+## Project Id vs Channel
+
+`projectId` is the logical shared workspace id. `channel` is the routing scope.
+
+- `projectId`: the shared workspace identity used to choose the bus location
+- `channel`: the actual MACP routing scope for broadcast messages
+
+Simple setup:
+
+- `projectId` derives from the current folder name
+- one local SQLite file under `.macp/`
+- one default channel derived from the `projectId`
+
+Advanced setup:
+
+- explicit `projectId` lets multiple folders or repos share one workspace bus
+- explicit `projectId` defaults to a per-user shared DB path
+- one `projectId` can host multiple channels such as `frontend`, `backend`, or `release`
+
+Direct agent-to-agent messages are not channel-scoped.
+
 ## Why SQLite
 
 The transport is a shared database file rather than a server:
@@ -259,6 +283,7 @@ This repository ships:
 - the normative schema
 - a TypeScript reference implementation in `src/macp-core.ts`
 - a TypeScript MCP server in `src/server.ts`
+- first-party workspace extensions implemented in `src/macp-extensions.ts` and `src/macp-extensions-advanced.ts`
 
 ## Using MACP
 
@@ -271,23 +296,47 @@ There are two supported paths:
 
 ### MCP Path
 
-Clone, install, and build:
+Single-line project activation:
+
+```bash
+npx -y macp-mcp init
+```
+
+If you are running from a cloned repo instead of the published package:
 
 ```bash
 git clone https://github.com/multiagentcognition/macp.git
 cd macp
 npm install
 npm run build
+node build/src/cli.js init
 ```
 
-Run the reference MCP server with a shared SQLite file:
+What `init` does:
+
+- creates `.macp/config.json`
+- derives `projectId` from the current folder unless you override it
+- uses a local DB under `.macp/` by default
+- uses a per-user shared DB path when you explicitly set `projectId`
+- writes project-local MCP config files for supported hosts
+- appends a managed MACP block to `AGENTS.md` and `CLAUDE.md`
+
+Advanced/manual server launch is still available if you need explicit paths or a
+non-default channel:
 
 ```bash
-MACP_DB_PATH=/tmp/macp_team.db \
-MACP_AGENT_ID=agent-alpha \
-MACP_AGENT_NAME=Alpha \
-MACP_DEFAULT_CHANNEL=case-001 \
-node build/src/server.js
+npx -y macp-mcp server \
+  --db /tmp/project-x.macp.db \
+  --channel project-x \
+  --project-id project-x \
+  --agent-id agent-alpha \
+  --agent-name Alpha
+```
+
+To deliberately share one MACP bus across different folders or repos:
+
+```bash
+npx -y macp-mcp init --project-id acme-release-war-room
 ```
 
 The MCP tool surface is:
@@ -302,7 +351,37 @@ The MCP tool surface is:
 - `macp_deregister`
 
 `macp_get_instructions` returns MCP-tool guidance only. It should tell an agent
-to use the MACP tools, not to execute SQL or open the SQLite file directly.
+to use the MACP tools, not to execute SQL or open the SQLite file directly. In
+the normal `init` flow, the server has already auto-registered the session and
+auto-joined the default channel before the agent starts calling tools.
+
+This server build also ships optional workspace extensions layered on top of
+the core bus:
+
+- awareness: `macp_ext_list_agents`, `macp_ext_get_session_context`
+- advisory file ownership: `macp_ext_claim_files`, `macp_ext_release_files`, `macp_ext_list_locks`
+- shared memory: `macp_ext_set_memory`, `macp_ext_get_memory`, `macp_ext_search_memory`, `macp_ext_list_memories`, `macp_ext_delete_memory`, `macp_ext_resolve_memory`
+- profiles: `macp_ext_register_profile`, `macp_ext_get_profile`, `macp_ext_list_profiles`, `macp_ext_find_profiles`
+- tasks: `macp_ext_dispatch_task`, `macp_ext_claim_task`, `macp_ext_start_task`, `macp_ext_complete_task`, `macp_ext_block_task`, `macp_ext_cancel_task`, `macp_ext_get_task`, `macp_ext_list_tasks`, `macp_ext_archive_tasks`
+- goals: `macp_ext_create_goal`, `macp_ext_list_goals`, `macp_ext_get_goal`, `macp_ext_update_goal`, `macp_ext_get_goal_cascade`
+- agent lifecycle: `macp_ext_sleep_agent`, `macp_ext_deactivate_agent`, `macp_ext_delete_agent`
+- vault/docs: `macp_ext_register_vault`, `macp_ext_search_vault`, `macp_ext_get_vault_doc`, `macp_ext_list_vault_docs`
+- context search: `macp_ext_query_context`
+
+These tools are intentionally non-normative. The protocol remains defined by
+[`macp.schema.json`](macp.schema.json) and [the v1.0 spec](spec/MACP-v1.0.md).
+See [Workspace Extensions](docs/EXTENSIONS.md) for the design boundary.
+The shipped [agent instructions template](examples/MACP_COORDINATION.md) and
+[repo-local AGENTS.md](AGENTS.md) cover the recommended extension workflow.
+
+Normal agent loops should use `macp_poll`, `macp_send_channel`, `macp_send_direct`,
+and `macp_ack`. `macp_register` and `macp_join_channel` remain available for
+explicit repair or override flows.
+
+If your MCP host does not honor the generated project config files, use the
+manual `server` command above or copy the generated server entry into the host's
+equivalent MCP config. Use `--project-id` when you want cross-folder sharing
+without relying on the current folder name.
 
 ### Raw SQL Path
 
@@ -338,19 +417,30 @@ Out of scope for v1.0:
 - federated routing
 - packaged auth and network security controls
 
+This repository may also ship optional helper layers above the protocol. Those
+helpers can improve coordination, but they are not part of the MACP v1.0
+contract unless they are added to the normative schema and spec.
+
 ## Files
 
 ```text
 macp.schema.json          Normative schema and SQL operations
 spec/MACP-v1.0.md         Companion SQLite-only specification
 docs/TUTORIAL.md          Quickstart and usage patterns
+docs/EXTENSIONS.md        Optional workspace-layer extensions
 docs/SECURITY.md          Shared-file security model
+docs/RELEASE_CHECKLIST.md Release validation checklist
+AGENTS.md                Repo-local contributor instructions using core + extensions
 package.json             Node package metadata for the reference implementation
 tsconfig.json            TypeScript build configuration
+src/cli.ts               CLI entrypoint for macp-mcp / macp-server
 src/index.ts             Package entrypoint exports
+src/project.ts           Project activation and config discovery helpers
 src/schema.ts            Schema loading helpers
-src/macp-core.ts          TypeScript reference implementation
-src/server.ts             TypeScript MCP server
+src/macp-core.ts         TypeScript reference implementation
+src/macp-extensions.ts   Core workspace extensions
+src/macp-extensions-advanced.ts Advanced workspace extensions
+src/server.ts            TypeScript MCP server
 examples/MACP_COORDINATION.md  Agent instructions template (copy into your project)
 ```
 

@@ -1,21 +1,65 @@
 {
-  "name": "macp",
+  "name": "macp-mcp",
   "version": "1.0.0",
   "type": "module",
   "description": "Multi-Agent Cognition Protocol -- real-time cognitive collaboration between AI agents during active execution.",
   "license": "Apache-2.0",
+  "main": "./build/src/index.js",
+  "types": "./build/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/src/index.d.ts",
+      "import": "./build/src/index.js"
+    },
+    "./server": {
+      "types": "./build/src/server.d.ts",
+      "import": "./build/src/server.js"
+    },
+    "./schema": {
+      "types": "./build/src/schema.d.ts",
+      "import": "./build/src/schema.js"
+    },
+    "./macp.schema.json": "./macp.schema.json",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "macp-mcp": "build/src/cli.js",
+    "macp-server": "build/src/server.js"
+  },
+  "files": [
+    "build/src/",
+    "macp.schema.json",
+    "spec/MACP-v1.0.md",
+    "AGENTS.md",
+    "docs/TUTORIAL.md",
+    "docs/EXTENSIONS.md",
+    "docs/SECURITY.md",
+    "examples/MACP_COORDINATION.md",
+    "README.md",
+    "LICENSE"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/multiagentcognition/macp.git"
+    "url": "git+https://github.com/multiagentcognition/macp.git"
   },
   "homepage": "https://macp.dev",
+  "keywords": [
+    "agents",
+    "ai",
+    "mcp",
+    "sqlite",
+    "coordination",
+    "protocol"
+  ],
   "engines": {
     "node": ">=22.5.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test build/test/**/*.test.js",
-    "server": "node build/src/server.js"
+    "validate": "npm run test && node build/src/cli.js --help && node build/src/server.js --help && npm pack --dry-run",
+    "prepublishOnly": "npm run validate",
+    "server": "node build/src/cli.js server"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

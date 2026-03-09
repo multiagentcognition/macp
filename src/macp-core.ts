@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { SQLInputValue } from 'node:sqlite';
 
@@ -204,6 +206,7 @@ export class MacpCore {
 
   constructor(options: MacpCoreOptions) {
     this.dbPath = options.dbPath;
+    mkdirSync(dirname(options.dbPath), { recursive: true });
     this.db = new DatabaseSync(options.dbPath);
     this.nowProvider = options.now ?? (() => new Date().toISOString());
 
