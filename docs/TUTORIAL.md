@@ -20,6 +20,8 @@ That single command:
 - derives `projectId` from the current folder name unless you override it
 - creates a local SQLite path under `.macp/` by default
 - writes project-local MCP config files for supported hosts
+- writes `opencode.json` for OpenCode
+- writes `.gemini/settings.json` so Gemini CLI uses `AGENTS.md`
 - scaffolds managed MACP blocks in `AGENTS.md` and `CLAUDE.md`
 
 If you are working from a local clone instead of the published package:
@@ -77,6 +79,13 @@ and that server:
 - auto-registers the current session on startup
 - auto-joins the default channel on startup
 - exposes the MACP tool surface over stdio
+
+Host support today:
+
+- Claude Code: reads `.mcp.json` and `CLAUDE.md`
+- OpenCode: reads `opencode.json` and `AGENTS.md`
+- Gemini CLI: reads `.gemini/settings.json` and `AGENTS.md`
+- Codex: reads `AGENTS.md`, but MCP server attachment still needs Codex-side configuration
 
 If you need a manual launch instead of project-local config, use:
 

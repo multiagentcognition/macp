@@ -8,6 +8,60 @@ Protocol v1.0 | [Schema](macp.schema.json) | [Specification](spec/MACP-Protocol-
 
 ---
 
+## Quick Start
+
+Activate MACP once in the project root:
+
+```bash
+npx -y macp-mcp init
+```
+
+That is the primary deployment flow.
+
+What it does:
+
+- derives `projectId` from the current folder by default
+- creates `.macp/config.json`
+- creates a local SQLite bus under `.macp/`
+- writes project-local MCP config for supported hosts
+- updates `AGENTS.md` and `CLAUDE.md` with a managed MACP block
+
+### Most Common Setup: One Project, Many Coding Agents
+
+This is the agentic coding workflow:
+
+1. run `npx -y macp-mcp init` once in the repo root
+2. open Claude Code, OpenCode, Gemini CLI, or another supported agent in that same folder
+3. each new session gets its own MCP server process, auto-registers, and joins the same MACP workspace
+4. the shared `projectId` and DB come from the project config written by the first setup step
+5. `AGENTS.md` or `CLAUDE.md` can tell the agent to use a different channel or extra tools such as memory, vault, tasks, or goals
+
+In other words: the first setup activates MACP for the project; later agent
+sessions launched from that folder should reuse that same project-scoped MACP
+config unless their local instructions explicitly tell them to work on a
+different channel.
+
+### Cross-Folder or Cross-Repo Workspace
+
+If you want agents from different folders or repositories to share one MACP
+workspace, set an explicit `projectId`:
+
+```bash
+npx -y macp-mcp init --project-id acme-release-war-room
+```
+
+With an explicit `projectId`, the default DB path moves to a per-user shared
+location so agents from different working directories can still hit the same
+bus.
+
+### Host Notes
+
+- Claude Code: project-local `.mcp.json` plus `CLAUDE.md`
+- OpenCode: project-local `opencode.json` plus `AGENTS.md`
+- Gemini CLI: project-local `.gemini/settings.json` plus `AGENTS.md`
+- Codex: `AGENTS.md` is supported, but MCP attachment still needs Codex-side
+  configuration instead of the same project-local auto-attach flow
+
 ## 20 Agents, One Codebase, Zero Conflicts
 
 Run Claude Code, OpenCode, Codex -- any combination of AI coding agents -- on
@@ -62,24 +116,15 @@ Every other agent sees this in real time, before it touches a single file.
 - **Zero central infrastructure.** One SQLite file. No broker, no network. In
   MCP mode, each agent uses its own local stdio server process as a wrapper.
 
-Activate MACP once in the project root:
-
-```bash
-npx -y macp-mcp init
-```
-
-That one command writes the shared project config, creates project-local MCP
-config files, and scaffolds the instruction files. Hosts that honor one of the
-generated project-local MCP config files can attach MACP for that project
-automatically. Each agent session gets its own MCP server process,
-auto-registers on startup, and auto-joins the default channel. If a host does
-not support project-local config discovery yet, use the generated server entry
-or the manual `server` command. No per-agent SQL or manual register step.
+The quick-start flow above is the intended deployment model. MACP is activated
+once per project, then later agent sessions reuse the same project-scoped bus
+configuration automatically when their host supports project-local MCP config.
 
 `init` writes:
 
 - `.macp/config.json`
 - `.mcp.json`
+- `opencode.json`
 - `.gemini/settings.json`
 - `.vscode/mcp.json`
 - `.cursor/mcp.json`

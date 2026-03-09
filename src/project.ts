@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 export const MACP_CONFIG_DIR = '.macp';
 export const MACP_CONFIG_FILENAME = 'config.json';
 export const MACP_MCP_FILENAME = '.mcp.json';
+export const MACP_OPENCODE_CONFIG_FILENAME = 'opencode.json';
 export const MACP_GEMINI_SETTINGS_PATH = '.gemini/settings.json';
 export const MACP_VSCODE_MCP_PATH = '.vscode/mcp.json';
 export const MACP_CURSOR_MCP_PATH = '.cursor/mcp.json';
@@ -224,6 +225,23 @@ function buildVsCodeMcpConfig(projectRoot: string): Record<string, unknown> {
   };
 }
 
+function buildOpenCodeConfig(projectRoot: string): Record<string, unknown> {
+  return {
+    $schema: 'https://opencode.ai/config.json',
+    instructions: ['AGENTS.md'],
+    mcp: {
+      macp: {
+        type: 'local',
+        command: ['npx', '-y', 'macp-mcp', 'server'],
+        enabled: true,
+        environment: {
+          MACP_PROJECT_ROOT: projectRoot,
+        },
+      },
+    },
+  };
+}
+
 export function initProject(options: InitProjectOptions = {}): InitProjectResult {
   const config = buildProjectConfig(options);
   const macpDir = join(config.projectRoot, MACP_CONFIG_DIR);
@@ -279,16 +297,61 @@ export function initProject(options: InitProjectOptions = {}): InitProjectResult
     }
   };
 
+  const writeMergedGeminiSettings = (filePath: string): void => {
+    const existing = readJsonFile<Record<string, unknown>>(filePath) ?? {};
+    const existingMcpServers = (existing.mcpServers ?? {}) as Record<string, unknown>;
+    const existingContext = (existing.context ?? {}) as Record<string, unknown>;
+    const nextValue = {
+      ...existing,
+      mcpServers: {
+        ...existingMcpServers,
+        ...((buildMcpConfig(config.projectRoot).mcpServers ?? {}) as Record<string, unknown>),
+      },
+      context: {
+        ...existingContext,
+        fileName: 'AGENTS.md',
+      },
+    };
+
+    mkdirSync(dirname(filePath), { recursive: true });
+    if (JSON.stringify(existing) !== JSON.stringify(nextValue)) {
+      writeFileSync(filePath, `${JSON.stringify(nextValue, null, 2)}\n`, 'utf8');
+      updatedFiles.push(filePath);
+    }
+  };
+
+  const writeMergedOpenCodeConfig = (filePath: string): void => {
+    const existing = readJsonFile<Record<string, unknown>>(filePath) ?? {};
+    const built = buildOpenCodeConfig(config.projectRoot);
+    const existingMcp = (existing.mcp ?? {}) as Record<string, unknown>;
+    const existingInstructions = Array.isArray(existing.instructions)
+      ? existing.instructions.filter((value): value is string => typeof value === 'string')
+      : [];
+    const nextInstructions = existingInstructions.includes('AGENTS.md')
+      ? existingInstructions
+      : ['AGENTS.md', ...existingInstructions];
+    const nextValue = {
+      ...existing,
+      $schema: built.$schema,
+      instructions: nextInstructions,
+      mcp: {
+        ...existingMcp,
+        ...((built.mcp ?? {}) as Record<string, unknown>),
+      },
+    };
+
+    if (JSON.stringify(existing) !== JSON.stringify(nextValue)) {
+      writeFileSync(filePath, `${JSON.stringify(nextValue, null, 2)}\n`, 'utf8');
+      updatedFiles.push(filePath);
+    }
+  };
+
   writeMergedJsonFile(
     mcpConfigPath,
     'mcpServers',
     (buildMcpConfig(config.projectRoot).mcpServers ?? {}) as Record<string, unknown>,
   );
-  writeMergedJsonFile(
-    join(config.projectRoot, MACP_GEMINI_SETTINGS_PATH),
-    'mcpServers',
-    (buildMcpConfig(config.projectRoot).mcpServers ?? {}) as Record<string, unknown>,
-  );
+  writeMergedGeminiSettings(join(config.projectRoot, MACP_GEMINI_SETTINGS_PATH));
   writeMergedJsonFile(
     join(config.projectRoot, MACP_CURSOR_MCP_PATH),
     'mcpServers',
@@ -299,6 +362,7 @@ export function initProject(options: InitProjectOptions = {}): InitProjectResult
     'servers',
     (buildVsCodeMcpConfig(config.projectRoot).servers ?? {}) as Record<string, unknown>,
   );
+  writeMergedOpenCodeConfig(join(config.projectRoot, MACP_OPENCODE_CONFIG_FILENAME));
 
   const agentBlock = buildAgentInstructionBlock(nextConfig.projectId, nextConfig.defaultChannel);
   for (const filePath of [join(config.projectRoot, 'AGENTS.md'), join(config.projectRoot, 'CLAUDE.md')]) {
