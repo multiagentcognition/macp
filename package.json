@@ -1,6 +1,6 @@
 {
   "name": "macp-mcp",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "Multi-Agent Cognition Protocol -- real-time cognitive collaboration between AI agents during active execution.",
   "license": "Apache-2.0",
