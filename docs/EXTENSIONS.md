@@ -4,7 +4,7 @@ This repository now ships a non-normative extension layer on top of MACP v1.0.
 
 The boundary is deliberate:
 
-- `macp.schema.json` and [`spec/MACP-v1.0.md`](../spec/MACP-v1.0.md) remain the normative protocol
+- `macp.schema.json` and [`spec/MACP-Protocol-v1.0.md`](../spec/MACP-Protocol-v1.0.md) remain the normative protocol
 - the extension layer adds higher-level coordination helpers in the same SQLite file
 - extension state is stored in `macp_ext_*` tables so the core transport model stays unchanged
 

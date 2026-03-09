@@ -4,7 +4,7 @@
 
 <img width="617" height="275.5" alt="macp_logo_m" src="https://github.com/user-attachments/assets/57ecb363-4cf6-44e3-80fb-5e5ae31cb933" />
 
-Version 1.0 | [Schema](macp.schema.json) | [Specification](spec/MACP-v1.0.md) | Apache 2.0 | [macp.dev](https://macp.dev) | [multiagentcognition.dev](https://multiagentcognition.dev)
+Protocol v1.0 | [Schema](macp.schema.json) | [Specification](spec/MACP-Protocol-v1.0.md) | Apache 2.0 | [macp.dev](https://macp.dev) | [multiagentcognition.dev](https://multiagentcognition.dev)
 
 ---
 
@@ -105,6 +105,9 @@ announce work, and communicate breaking changes. The repository root also ships
 working inside this repo.
 
 This turns a chaotic swarm of independent agents into a coordinated team.
+
+The protocol version is MACP v1.0. The npm package version tracks the
+reference implementation and MCP tooling, so it can advance independently.
 
 ---
 
@@ -369,10 +372,10 @@ the core bus:
 - context search: `macp_ext_query_context`
 
 These tools are intentionally non-normative. The protocol remains defined by
-[`macp.schema.json`](macp.schema.json) and [the v1.0 spec](spec/MACP-v1.0.md).
+[`macp.schema.json`](macp.schema.json) and [the v1.0 spec](spec/MACP-Protocol-v1.0.md).
 See [Workspace Extensions](docs/EXTENSIONS.md) for the design boundary.
-The shipped [agent instructions template](examples/MACP_COORDINATION.md) and
-[repo-local AGENTS.md](AGENTS.md) cover the recommended extension workflow.
+The shipped [agent instructions template](examples/MACP_COORDINATION.md) covers
+the recommended extension workflow.
 
 Normal agent loops should use `macp_poll`, `macp_send_channel`, `macp_send_direct`,
 and `macp_ack`. `macp_register` and `macp_join_channel` remain available for
@@ -424,24 +427,22 @@ contract unless they are added to the normative schema and spec.
 ## Files
 
 ```text
-macp.schema.json          Normative schema and SQL operations
-spec/MACP-v1.0.md         Companion SQLite-only specification
-docs/TUTORIAL.md          Quickstart and usage patterns
-docs/EXTENSIONS.md        Optional workspace-layer extensions
-docs/SECURITY.md          Shared-file security model
-docs/RELEASE_CHECKLIST.md Release validation checklist
-AGENTS.md                Repo-local contributor instructions using core + extensions
-package.json             Node package metadata for the reference implementation
-tsconfig.json            TypeScript build configuration
-src/cli.ts               CLI entrypoint for macp-mcp / macp-server
-src/index.ts             Package entrypoint exports
-src/project.ts           Project activation and config discovery helpers
-src/schema.ts            Schema loading helpers
-src/macp-core.ts         TypeScript reference implementation
-src/macp-extensions.ts   Core workspace extensions
-src/macp-extensions-advanced.ts Advanced workspace extensions
-src/server.ts            TypeScript MCP server
-examples/MACP_COORDINATION.md  Agent instructions template (copy into your project)
+macp.schema.json                 Normative schema and SQL operations
+spec/MACP-Protocol-v1.0.md       Companion SQLite-only specification
+docs/TUTORIAL.md                 Quickstart and usage patterns
+docs/EXTENSIONS.md               Optional workspace-layer extensions
+docs/SECURITY.md                 Shared-file security model
+package.json                     Node package metadata for the reference implementation
+tsconfig.json                    TypeScript build configuration
+src/cli.ts                       CLI entrypoint for macp-mcp / macp-server
+src/index.ts                     Package entrypoint exports
+src/project.ts                   Project activation and config discovery helpers
+src/schema.ts                    Schema loading helpers
+src/macp-core.ts                 TypeScript reference implementation
+src/macp-extensions.ts           Core workspace extensions
+src/macp-extensions-advanced.ts  Advanced workspace extensions
+src/server.ts                    TypeScript MCP server
+examples/MACP_COORDINATION.md    Agent instructions template (copy into your project)
 ```
 
 ## Requirements

@@ -175,38 +175,19 @@ Recommended agent loop:
 `macp_register` and `macp_join_channel` remain available for explicit repair or
 override flows, but they should not be part of the normal startup loop.
 
-## 6. Validate the Three-Agent Flow
+## 6. Validate the Build
 
-The repository includes an end-to-end test that launches three independent MCP
-server processes against one shared SQLite file and verifies core MACP behavior.
-
-The release suite also covers workspace extensions including memory, file
-claims, profiles, tasks, goals, lifecycle controls, vault indexing, and
-context search.
-
-Core checks include:
-
-- shared channel registration
-- channel fanout
-- direct messaging
-- ACK recording
-- poll redelivery behavior
-- budget pruning audit behavior
-
-Run it with:
-
-```bash
-npm test
-```
-
-Run the full release validation with:
+For the public release surface, the fastest local check is:
 
 ```bash
 npm run validate
 ```
 
-That validation path runs the test suite, smoke-tests both CLI entrypoints, and
-verifies the publishable package contents with `npm pack --dry-run`.
+That path:
+
+- builds the TypeScript implementation
+- smoke-tests both CLI entrypoints
+- verifies the publishable package contents with `npm pack --dry-run`
 
 ## 7. Direct SQL Path
 
@@ -234,10 +215,8 @@ Important operational rules:
 - receivers must therefore be idempotent
 - only `queued` and `surfaced` deliveries are ackable
 
-## 7. What the Test Proves
+## 8. Coordination Goal
 
-The current validation suite is not just schema parsing. It proves that a team
-of three agents can use MACP through MCP and communicate inside a single shared
-context backed by one SQLite file.
-
-That is the current release bar for the 1.0 release.
+The practical target for MACP remains the same: multiple agents sharing one
+SQLite-backed workspace, polling the same bus, and coordinating inside one
+shared context without duplicating work or missing important peer updates.

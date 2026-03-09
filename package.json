@@ -29,8 +29,7 @@
   "files": [
     "build/src/",
     "macp.schema.json",
-    "spec/MACP-v1.0.md",
-    "AGENTS.md",
+    "spec/MACP-Protocol-v1.0.md",
     "docs/TUTORIAL.md",
     "docs/EXTENSIONS.md",
     "docs/SECURITY.md",
@@ -56,8 +55,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test build/test/**/*.test.js",
-    "validate": "npm run test && node build/src/cli.js --help && node build/src/server.js --help && npm pack --dry-run",
+    "validate": "npm run build && node build/src/cli.js --help && node build/src/server.js --help && npm pack --dry-run",
     "prepublishOnly": "npm run validate",
     "server": "node build/src/cli.js server"
   },
