@@ -8,6 +8,15 @@ Protocol v1.0 | [Schema](macp.schema.json) | [Specification](spec/MACP-Protocol-
 
 ---
 
+MACP is a shared SQLite coordination layer for multiple AI agents working on the
+same project at the same time. It gives each agent a live bus for status
+updates, file ownership signals, memory, tasks, and high-priority findings
+without introducing a central network service.
+
+The `macp-mcp` package is the reference MCP wrapper around that protocol. You
+activate it once per project, then supported agent hosts can attach to the same
+workspace automatically and register each session on startup.
+
 ## Quick Start
 
 Activate MACP once in the project root:
