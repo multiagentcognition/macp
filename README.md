@@ -8,7 +8,11 @@ Protocol v1.0 | [Schema](macp.schema.json) | [Specification](spec/MACP-Protocol-
 
 ---
 
-MACP is a shared SQLite coordination layer. It lets multiple agents publish status, share findings, signal file ownership, and exchange durable context without a central broker.
+MACP is a protocol for coordination between AI agents: messaging, handoffs, delivery semantics, findings, memory, goals, tasks, and durable context between independent agents while work is happening.
+
+It bridges the gap between A2A and MCP: MCP handles tool access, A2A handles communication, and MACP handles coordination during execution.
+
+The repo includes macp-mcp as a reference implementation, but the idea is broader than coding tools. It’s meant for software that embeds multiple agents and needs them to coordinate reliably rather than behave like isolated workers.
 
 `macp-mcp` is the reference MCP wrapper around that protocol. You activate it once per project, then supported hosts can attach to the same workspace and auto-register each session on startup.
 
