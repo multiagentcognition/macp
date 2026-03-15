@@ -2,8 +2,6 @@
 
 **Multi-Agent Cognition Protocol** for real-time coordination between AI agents working on the same project.
 
-<img width="617" height="275.5" alt="macp_logo_m" src="https://github.com/user-attachments/assets/57ecb363-4cf6-44e3-80fb-5e5ae31cb933" />
-
 Protocol v1.0 | [Schema](macp.schema.json) | [Specification](spec/MACP-Protocol-v1.0.md) | Apache 2.0 | [macp.dev](https://macp.dev) | [multiagentcognition.dev](https://multiagentcognition.dev)
 
 ---
