@@ -192,7 +192,9 @@ examples/MACP_COORDINATION.md    Agent instructions template
 
 ## Requirements
 
-MACP requires SQLite 3.35+ with WAL mode and a shared filesystem path reachable by all participating agents. Any language with SQLite support can implement it using the SQL operations in [macp.schema.json](macp.schema.json).
+The protocol requires SQLite 3.35+ with WAL mode and a shared filesystem path reachable by all participating agents. Any language with SQLite support can implement it using the SQL operations in [macp.schema.json](macp.schema.json).
+
+The `macp` npm package (TypeScript reference implementation) requires Node.js 22.5+.
 
 ## Links
 
