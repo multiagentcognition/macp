@@ -12,43 +12,43 @@ It bridges the gap between A2A and MCP: MCP handles tool access, A2A handles com
 
 The repo includes macp-mcp as a reference implementation, but the idea is broader than coding tools. It’s meant for software that embeds multiple agents and needs them to coordinate reliably rather than behave like isolated workers.
 
-`macp-mcp` is the reference MCP wrapper around that protocol. You activate it once per project, then supported hosts can attach to the same workspace and auto-register each session on startup.
+This repo contains the protocol itself — spec, schema, core logic, and extensions. It has zero runtime dependencies.
 
-**Jump to:**
-- [Quick Start](#quick-start)
-- [What MACP Is](#what-macp-is)
-- [The Opportunity](#the-opportunity)
-- [What MACP Enables](#what-macp-enables)
-- [How It Works](#how-it-works)
-- [Common Setups](#common-setups)
-- [Host Support](#host-support)
-- [Tool Surface](#tool-surface)
-- [Direct SQL](#direct-sql)
-- [Protocol vs Package Version](#protocol-vs-package-version)
-- [Reference Files](#reference-files)
+```bash
+npm i macp
+```
+
+```ts
+import { MacpCore, MacpWorkspaceExtensions } from 'macp';
+```
+
+## MCP Implementations
+
+There are two MCP server implementations for MACP, both part of the [multiagentcognition](https://github.com/multiagentcognition) org:
+
+- **[macp-agent-mcp](https://github.com/multiagentcognition/macp-agent-mcp)** — the reference MCP server for AI coding agents. Activate it once per project and supported hosts auto-register each session on startup.
+- **[openclaw](https://github.com/multiagentcognition/openclaw)** — the OpenClaw plugin that exposes MACP coordination through the OpenClaw agent framework.
 
 ## Quick Start
 
-Activate MACP once in the project root:
+The fastest way to use MACP is through the agent MCP server:
 
 ```bash
-npx -y macp-mcp init
+npx -y macp-agent-mcp init
 ```
 
-That command:
-- derives `projectId` from the current folder by default
-- creates `.macp/config.json`
-- creates a local SQLite bus under `.macp/`
-- writes project-local MCP config for supported hosts
-- updates `AGENTS.md` and `CLAUDE.md` with a managed MACP block
+That command activates MACP for the current project, creates a local SQLite bus, and writes MCP config for supported hosts.
 
-If you are running from a local clone instead of the published package:
+To use the protocol directly without MCP, install this package and use the classes:
 
-```bash
-npm install
-npm run build
-node build/src/cli.js init
+```ts
+import { MacpCore, MacpWorkspaceExtensions, MacpWorkspaceExtensionsAdvanced } from 'macp';
+
+const core = new MacpCore({ dbPath: '/path/to/shared.db' });
+core.registerAgent({ agentId: 'my-agent', sessionId: 'session-1', name: 'My Agent', capabilities: {}, interestTags: [], queuePreferences: { maxPendingMessages: 200 } });
 ```
+
+Or use the SQL operations from [macp.schema.json](macp.schema.json) directly with bound parameters from any language.
 
 ## What MACP Is
 
@@ -58,9 +58,7 @@ layer, keeps delivery state and ACK state durable, and lets agents exchange
 findings without introducing a central network service.
 
 The protocol itself lives in [macp.schema.json](macp.schema.json) and
-[spec/MACP-Protocol-v1.0.md](spec/MACP-Protocol-v1.0.md). The `macp-mcp`
-package is the reference TypeScript CLI and MCP server built on top of that
-protocol.
+[spec/MACP-Protocol-v1.0.md](spec/MACP-Protocol-v1.0.md).
 
 ## The Opportunity
 
@@ -106,109 +104,32 @@ Priority tiers:
 - `steering`
 - `interrupt`
 
-## Common Setups
+## Protocol Operations
 
-### One Project, Many Coding Agents
+Core operations:
+- `register` / `deregister`
+- `join` (channel)
+- `send` (channel or direct)
+- `poll`
+- `ack`
 
-This is the main workflow:
-
-1. run `npx -y macp-mcp init` once in the repo root
-2. open Claude Code, OpenCode, Gemini CLI, or another supported host in that same folder
-3. each new session gets its own MCP server process, auto-registers, and joins the same MACP workspace
-4. `AGENTS.md` or `CLAUDE.md` can tell the agent which channel to use and whether to use memory, tasks, vault, or other workspace tools
-
-The first setup activates MACP for the project. Later agent sessions launched from that folder reuse the same project-scoped configuration unless their local instructions explicitly tell them to work on another channel.
-
-### Cross-Folder or Cross-Repo Workspace
-
-If you want agents from different folders or repositories to share one workspace, set an explicit `projectId`:
-
-```bash
-npx -y macp-mcp init --project-id acme-release-war-room
-```
-
-With an explicit `projectId`, the default DB path moves to a per-user shared location so agents from different working directories can still hit the same bus.
-
-### ProjectId vs Channel
-
-- `projectId`: the logical shared workspace id
-- `channel`: the MACP routing scope for broadcast messages
-
-Default setup:
-- `projectId` comes from the current folder name
-- one local SQLite file under `.macp/`
-- one default channel derived from `projectId`
-
-Advanced setup:
-- explicit `projectId` lets multiple folders or repos share one bus
-- one `projectId` can host multiple channels such as `frontend`, `backend`, or `release`
-- direct agent-to-agent messages are not channel-scoped
-
-## Host Support
-
-Project activation currently writes these host-facing config files:
-
-- `.mcp.json`
-- `opencode.json`
-- `.gemini/settings.json`
-- `.vscode/mcp.json`
-- `.cursor/mcp.json`
-
-Current support model:
-
-- Claude Code: project-local `.mcp.json` plus `CLAUDE.md`
-- OpenCode: `opencode.json` plus `AGENTS.md`
-- Gemini CLI: `.gemini/settings.json` plus `AGENTS.md`
-- Cursor / VS Code: project-local MCP config is written, depending on the editor MCP flow you use
-- Codex: `AGENTS.md` is supported, but MCP attachment still needs Codex-side configuration rather than the same project-local auto-attach flow
-
-For project instructions, copy [examples/MACP_COORDINATION.md](examples/MACP_COORDINATION.md) into the file your host reads:
-
-- Claude Code: `CLAUDE.md`
-- Codex: `AGENTS.md`
-- OpenCode: `AGENTS.md`
-- other MCP-capable hosts: system prompt or agent instructions
-
-Replace `{{MACP_CHANNEL}}` if you want the default channel called out explicitly in the instruction text.
-
-## Tool Surface
-
-Core MACP tools:
-- `macp_get_instructions`
-- `macp_register`
-- `macp_join_channel`
-- `macp_send_channel`
-- `macp_send_direct`
-- `macp_poll`
-- `macp_ack`
-- `macp_deregister`
-
-Optional workspace extensions:
-- awareness: `macp_ext_list_agents`, `macp_ext_get_session_context`
-- file ownership: `macp_ext_claim_files`, `macp_ext_release_files`, `macp_ext_list_locks`
-- memory: `macp_ext_set_memory`, `macp_ext_get_memory`, `macp_ext_search_memory`, `macp_ext_list_memories`, `macp_ext_delete_memory`, `macp_ext_resolve_memory`
-- profiles: `macp_ext_register_profile`, `macp_ext_get_profile`, `macp_ext_list_profiles`, `macp_ext_find_profiles`
-- goals: `macp_ext_create_goal`, `macp_ext_list_goals`, `macp_ext_get_goal`, `macp_ext_update_goal`, `macp_ext_get_goal_cascade`
-- tasks: `macp_ext_dispatch_task`, `macp_ext_claim_task`, `macp_ext_start_task`, `macp_ext_complete_task`, `macp_ext_block_task`, `macp_ext_cancel_task`, `macp_ext_get_task`, `macp_ext_list_tasks`, `macp_ext_archive_tasks`
-- lifecycle: `macp_ext_sleep_agent`, `macp_ext_deactivate_agent`, `macp_ext_delete_agent`
-- vault/docs: `macp_ext_register_vault`, `macp_ext_search_vault`, `macp_ext_get_vault_doc`, `macp_ext_list_vault_docs`
-- context search: `macp_ext_query_context`
-
-Normal agent loops should mostly use:
-- `macp_poll`
-- `macp_send_channel`
-- `macp_send_direct`
-- `macp_ack`
-
-`macp_register` and `macp_join_channel` are still available for repair or override flows, but they should not be part of the normal startup loop after project activation.
+Extension operations:
+- awareness: list agents, get session context
+- file ownership: claim files, release files, list locks
+- memory: set, get, search, list, delete, resolve
+- profiles: register, get, list, find
+- goals: create, list, get, update, get cascade
+- tasks: dispatch, claim, start, complete, block, cancel, get, list, archive
+- lifecycle: sleep agent, deactivate agent, delete agent
+- vault/docs: register vault, search vault, get vault doc, list vault docs
+- context search: query context
 
 See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for the extension boundary and [docs/TUTORIAL.md](docs/TUTORIAL.md) for the longer walkthrough.
 
 ## Direct SQL
 
-If you do not want MCP, use the SQL operations from [macp.schema.json](macp.schema.json) directly with bound parameters.
+Use the SQL operations from [macp.schema.json](macp.schema.json) directly with bound parameters:
 
-Normal sequence:
 1. apply the DDL from `connection.schema_ddl`
 2. `operations.register`
 3. `operations.join`
@@ -232,18 +153,9 @@ Important operational rules:
 
 MACP gives each recipient its own `delivery_id` while preserving one logical `message_id` per send. Delivery state, ACK state, pruning, and queue limits all live in the same SQLite file.
 
-Priority tiers:
-- `info`
-- `advisory`
-- `steering`
-- `interrupt`
-
 Per-delivery lifecycle:
-- `queued`
-- `surfaced`
-- `acknowledged`
-- `expired`
-- `dropped`
+- `queued` → `surfaced` → `acknowledged`
+- `expired` / `dropped` (terminal)
 
 ACK lifecycle:
 - `queued`: written automatically when a delivery row is inserted
@@ -262,37 +174,25 @@ Why SQLite:
 - durable with WAL mode
 - usable from any language with SQLite support
 
-## Protocol vs Package Version
-
-- protocol version: `MACP v1.0`
-- npm package version: `macp-mcp 2.1.0`
-
-The protocol version tracks the schema and companion spec. The npm package version tracks the TypeScript implementation, CLI, MCP server, and packaging UX.
-
 ## Reference Files
 
 ```text
 macp.schema.json                 Normative schema and SQL operations
-spec/MACP-Protocol-v1.0.md       Companion SQLite-only specification
-docs/TUTORIAL.md                 Quickstart and usage patterns
-docs/EXTENSIONS.md               Optional workspace-layer extensions
-docs/SECURITY.md                 Shared-file security model
-package.json                     Node package metadata for the reference implementation
-tsconfig.json                    TypeScript build configuration
-src/cli.ts                       CLI entrypoint for macp-mcp / macp-server
+spec/MACP-Protocol-v1.0.md      Companion SQLite-only specification
 src/index.ts                     Package entrypoint exports
-src/project.ts                   Project activation and config discovery helpers
 src/schema.ts                    Schema loading helpers
 src/macp-core.ts                 TypeScript reference implementation
 src/macp-extensions.ts           Core workspace extensions
 src/macp-extensions-advanced.ts  Advanced workspace extensions
-src/server.ts                    TypeScript MCP server
+docs/TUTORIAL.md                 Quickstart and usage patterns
+docs/EXTENSIONS.md               Optional workspace-layer extensions
+docs/SECURITY.md                 Shared-file security model
 examples/MACP_COORDINATION.md    Agent instructions template
 ```
 
 ## Requirements
 
-- Node.js 22.5+ for the TypeScript reference implementation and MCP server
+- Node.js 22.5+ for the TypeScript reference implementation
 - SQLite 3.35+
 - shared filesystem path reachable by all participating agents
 - agents that can execute SQL with bound parameters

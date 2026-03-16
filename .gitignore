@@ -6,3 +6,4 @@ build/
 .tmp/
 .env
 .env.*
+package-lock.json
