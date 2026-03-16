@@ -10,9 +10,9 @@ MACP is a protocol for coordination between AI agents: messaging, handoffs, deli
 
 It bridges the gap between A2A and MCP: MCP handles tool access, A2A handles communication, and MACP handles coordination during execution.
 
-The repo includes macp-mcp as a reference implementation, but the idea is broader than coding tools. It’s meant for software that embeds multiple agents and needs them to coordinate reliably rather than behave like isolated workers.
+The idea is broader than coding tools. It’s meant for software that embeds multiple agents and needs them to coordinate reliably rather than behave like isolated workers.
 
-This repo contains the protocol itself — spec, schema, core logic, and extensions. It has zero runtime dependencies.
+This repo contains the protocol — spec, schema, and a TypeScript reference implementation with zero runtime dependencies.
 
 ```bash
 npm i macp
@@ -27,7 +27,7 @@ import { MacpCore, MacpWorkspaceExtensions } from 'macp';
 There are two MCP server implementations for MACP, both part of the [multiagentcognition](https://github.com/multiagentcognition) org:
 
 - **[macp-agent-mcp](https://github.com/multiagentcognition/macp-agent-mcp)** — the reference MCP server for AI coding agents. Activate it once per project and supported hosts auto-register each session on startup.
-- **[openclaw](https://github.com/multiagentcognition/openclaw)** — the OpenClaw plugin that exposes MACP coordination through the OpenClaw agent framework.
+- **[macp-openclaw-plugin](https://github.com/multiagentcognition/macp-openclaw-plugin)** — the OpenClaw plugin that exposes MACP coordination through the OpenClaw agent framework.
 
 ## Quick Start
 
@@ -192,15 +192,14 @@ examples/MACP_COORDINATION.md    Agent instructions template
 
 ## Requirements
 
-- Node.js 22.5+ for the TypeScript reference implementation
-- SQLite 3.35+
-- shared filesystem path reachable by all participating agents
-- agents that can execute SQL with bound parameters
+The protocol requires:
+- SQLite 3.35+ with WAL mode
+- a shared filesystem path reachable by all participating agents
 
-## Status
+The TypeScript reference implementation (`npm i macp`) additionally requires:
+- Node.js 22.5+
 
-MACP v1.0 in this repository is the SQLite/shared-database protocol only.
-There are no alternate transport definitions in scope for this version.
+Any language with SQLite support can implement MACP directly using the SQL operations in [macp.schema.json](macp.schema.json).
 
 ## Links
 
