@@ -76,13 +76,23 @@ upstream commit + a working binding: contribution welcome.
 
 | Organ | Where |
 |---|---|
-| Mid-turn input | user messages typed during a turn are queued and delivered at the next boundary (product behavior); **hooks** (PreToolUse/Stop and others) run inside every agent's own context — including subagents — and their output enters the model's context on the harness channel |
-| Tool cancel | Esc interrupts the running tool |
+| Mid-turn input | text entered during a turn is queued and drained at the next inference boundary (product behavior — interactive and stream-json/SDK sessions alike) |
+| Tool cancel | Esc (interactive) / `interrupt()` (Agent SDK) aborts the running tool, keeping partial output |
 
-**L1 path (no vendor changes):** a hook-based binding — a PreToolUse hook drains the
-center inbox and emits envelopes as hook output (harness-authenticated by construction,
-spec §8.1 D4), plus a `macp send` CLI. Interrupt-tier requires harness cooperation or
-process-level signaling; boundary delivery works today.
+**L1 path (no vendor changes) — the binding is a daemon that injects on the user-input
+channel** (which tool output can never write — spec §8.1 D4 holds by construction):
+
+- *Spawned/headless sessions* (`claude -p --input-format=stream-json`, Agent SDK): push =
+  a user-message JSON line on the session's stdin → native mid-turn queue → next boundary.
+  Interrupt = the SDK `interrupt()` → tool aborted, partial output kept, envelope follows.
+- *Interactive sessions*: push = the daemon types the envelope into the session (PTY
+  wrapper or terminal automation) → the same mid-turn queue. Interrupt = inject **Esc**
+  first — the harness's own boundary-creation machinery — then the envelope.
+
+Hooks are supplementary, not the transport: SessionStart for registration + the §10
+obligations preamble; PostToolUse/Stop as extra drain points. A hooks-only binding is
+NOT L1 — it delivers only when the agent happens to reach a hook and can never create a
+boundary; that is v1-style pull with better timing.
 
 ## Gemini CLI, goose, aider, OpenHands — **unsurveyed**
 
