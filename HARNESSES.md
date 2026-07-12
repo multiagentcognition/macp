@@ -94,6 +94,18 @@ obligations preamble; PostToolUse/Stop as extra drain points. A hooks-only bindi
 NOT L1 — it delivers only when the agent happens to reach a hook and can never create a
 boundary; that is v1-style pull with better timing.
 
+**The clean L2 shape (the vendor ask):** both required functions already exist in the
+product — the keyboard multiplexer enqueues mid-turn input; Esc aborts the running
+tool. L2 is exposing those same two internal calls on a per-session local control
+endpoint (e.g. a Unix socket at a well-known per-session path) accepting exactly two
+message types: `{"type":"user_input","text":…}` and `{"type":"interrupt"}`. This mirrors
+the programmatic session surface every other surveyed harness already ships (opencode's
+`/prompt`+`/interrupt` endpoints, Codex's typed operation queue, pi's RPC mode) — Claude
+Code is currently the only one of the four without a control surface for *running*
+sessions. Interim clean route without vendor changes: an SDK host — sessions launched
+through a thin Agent SDK wrapper that owns the stream and serves the control endpoint
+itself (covers hosted sessions only).
+
 ## Gemini CLI, goose, aider, OpenHands — **unsurveyed**
 
 Expected to fit the same two-organ pattern (all are interactive tool-loop harnesses with
