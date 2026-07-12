@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://macp.dev/schemas/2.0/registry-entry.schema.json",
+  "title": "MACP 2.0 Registry Entry",
+  "description": "One registered agent. The roster resource (macp://project/{project}/roster) is a JSON array of live entries; macp://self returns the caller's own entry including grants held.",
+  "type": "object",
+  "required": ["address", "project", "harness", "live", "registered_at"],
+  "additionalProperties": false,
+  "properties": {
+    "address": {
+      "type": "string",
+      "description": "The agent's assigned address (see envelope.schema.json $defs/address).",
+      "minLength": 1
+    },
+    "project": {
+      "type": "string",
+      "description": "Resolved logical project (spec §5.3).",
+      "minLength": 1
+    },
+    "harness": {
+      "type": "object",
+      "description": "From MCP initialize clientInfo.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "role": {
+      "type": ["string", "null"],
+      "description": "Free-form role label supplied via macp_register (e.g. 'worker', 'reviewer', 'orchestrator')."
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Free-form capability labels supplied via macp_register — what peers may ask this agent for.",
+      "items": { "type": "string" }
+    },
+    "roots": {
+      "type": "array",
+      "description": "Workspace roots declared via MCP roots/list, as scope evidence (spec §5.1). Informative; the resolved 'project' field is authoritative.",
+      "items": { "type": "string" }
+    },
+    "conformance": {
+      "type": ["string", "null"],
+      "enum": ["L0", "L1", "L2", "L3", null],
+      "description": "Conformance level of this agent's harness/binding, if declared. L1+ recipients receive realtime delivery; L0 recipients are poll-only."
+    },
+    "endpoint": {
+      "type": ["string", "null"],
+      "description": "Optional L3 drive endpoint: an MCP server URL served by this agent's harness (spec §12 L3). Access is grant-gated."
+    },
+    "live": {
+      "type": "boolean",
+      "description": "Connection open and responsive (spec §5.2). Stale entries are excluded from default roster reads."
+    },
+    "registered_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_seen_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "grants": {
+      "type": "array",
+      "description": "Grants HELD BY this agent (present only on macp://self; omitted from roster reads of other agents).",
+      "items": { "$ref": "grant.schema.json" }
+    }
+  }
+}

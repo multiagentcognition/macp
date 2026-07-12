@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://macp.dev/schemas/2.0/envelope.schema.json",
+  "title": "MACP 2.0 Envelope",
+  "description": "One message from one agent (or the human operator) to one recipient. The inbox resource (macp://agent/{address}/inbox) is a JSON array of these, priority-ordered. All fields except 'body' are provenance, authored by the coordinator/binding — never by the sending model (spec §7.3).",
+  "type": "object",
+  "required": ["macp", "id", "from", "to", "project", "priority", "sent_at", "ack", "body"],
+  "additionalProperties": false,
+  "properties": {
+    "macp": {
+      "type": "string",
+      "description": "Protocol version, major.minor.",
+      "pattern": "^2\\.[0-9]+$"
+    },
+    "id": {
+      "type": "string",
+      "description": "Coordinator-assigned delivery ID, unique per (envelope × recipient). Idempotency key for interrupt handling (spec §8.3 I5).",
+      "minLength": 1
+    },
+    "from": {
+      "$ref": "#/$defs/address",
+      "description": "Sender address. The coordinator MUST set this from the authenticated connection; senders cannot spoof it."
+    },
+    "to": {
+      "$ref": "#/$defs/address",
+      "description": "Recipient address. For broadcasts the coordinator fans out one envelope per recipient, each with its own id."
+    },
+    "project": {
+      "type": "string",
+      "description": "Logical project (scope) this delivery belongs to (spec §5.3).",
+      "minLength": 1
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["interrupt", "steering", "advisory", "info"],
+      "description": "interrupt > steering > advisory > info. interrupt and steering require a grant (spec §9)."
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Coordinator receive timestamp, UTC."
+    },
+    "ack": {
+      "type": "string",
+      "enum": ["auto", "required"],
+      "description": "'required' obliges the recipient agent to macp_ack processed before its turn ends (spec §8.5)."
+    },
+    "in_reply_to": {
+      "type": ["string", "null"],
+      "description": "Delivery id this envelope answers (request/reply correlation, spec §7.2)."
+    },
+    "body": {
+      "type": "string",
+      "description": "The message content. Plain text (may contain markdown). This is the only sender-authored field.",
+      "minLength": 1
+    },
+    "interrupted": {
+      "type": ["object", "null"],
+      "description": "Present only when this delivery arrived by aborting an in-flight operation (spec §8.3).",
+      "additionalProperties": false,
+      "required": ["operation", "partial_output"],
+      "properties": {
+        "operation": {
+          "type": "string",
+          "description": "Name of the aborted tool/operation."
+        },
+        "partial_output": {
+          "type": "boolean",
+          "description": "Whether partial output from the aborted operation precedes this envelope in context."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "address": {
+      "type": "string",
+      "description": "agent://<harness-id>/<agent-id>[/<subagent-path>] — or the reserved human operator address human://<operator-id>.",
+      "pattern": "^agent://[a-z0-9][a-z0-9._-]*(/[A-Za-z0-9._-]+)+$|^human://[a-z0-9][a-z0-9._-]*$"
+    }
+  }
+}

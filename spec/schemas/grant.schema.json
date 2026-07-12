@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://macp.dev/schemas/2.0/grant.schema.json",
+  "title": "MACP 2.0 Grant",
+  "description": "One authority grant: permission for a holder to send steering/interrupt-priority envelopes to a subject (spec §9). Default-deny: without a matching grant, steering+ sends are parked for consent or downgraded. No agent can create a grant over another agent for itself.",
+  "type": "object",
+  "required": ["id", "holder", "subject", "max_priority", "granted_by", "granted_at"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "holder": {
+      "type": "string",
+      "description": "Address (or project id prefixed 'project:') whose sends this grant authorizes."
+    },
+    "subject": {
+      "type": "string",
+      "description": "Address, 'project:<id>' (all agents in a project), or 'link:<idA>:<idB>' (bidirectional project link, spec §9 G5) this grant covers."
+    },
+    "max_priority": {
+      "type": "string",
+      "enum": ["steering", "interrupt"],
+      "description": "Highest priority the holder may send to the subject. 'interrupt' implies 'steering'."
+    },
+    "granted_by": {
+      "type": "string",
+      "description": "Who created it: a spawner's address (over its spawned agents only), 'config', or the human operator's address. Recorded for audit; MUST NOT equal a non-human holder acquiring authority over an unrelated subject (spec §9 G2)."
+    },
+    "granted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Optional expiry. Spawner grants SHOULD expire with the spawned agent's registration."
+    },
+    "note": {
+      "type": ["string", "null"],
+      "description": "Human-readable reason, shown in consent prompts and audit views."
+    }
+  }
+}

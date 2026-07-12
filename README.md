@@ -14,7 +14,7 @@ server**, and a delivery contract that harnesses wire to machinery they already 
 
 ## A short history: v1 → 2.0
 
-**MACP v1 (2026)** named the missing quadrant — *"MCP is tools, A2A is delegation, MACP is
+**[MACP v1](https://github.com/multiagentcognition/macp-v1) (2026)** named the missing quadrant — *"MCP is tools, A2A is delegation, MACP is
 coordination during execution"* — and got the state model right: durable, prioritized,
 addressed messages living outside every agent, plus file ownership, awareness, and shared
 memory as first-class extensions.
@@ -25,13 +25,15 @@ break rather than an upgrade:
 | | MACP v1 | MACP 2.0 |
 |---|---|---|
 | **Delivery** | poll — agents see messages when they choose to look; a worker deep in a 20-minute build sees nothing | **push at the inference boundary** — messages enter the agent's context before its next reasoning step; `interrupt` priority aborts the in-flight tool to create that boundary *now* |
-| **Transport & storage** | its own bus: a shared database file every agent writes | **stock MCP** — agents hold one ordinary outbound MCP connection to a coordinator; storage is the coordinator's private business |
-| **Harness integration** | unspecified — each integration invented its own | a **normative two-handler delivery contract** wired to code every harness already ships (mid-turn input queues, Esc-path tool cancellation) |
-| **Scope & authority** | flat | **logical projects** (rooms), default-deny grants, human supremacy, consent via MCP elicitation |
+| **Transport & storage** | its own bus: a shared database file every agent writes | **standard MCP** — agents hold one ordinary outbound MCP connection to a coordinator; storage is the coordinator's private business |
+| **Harness integration** | unspecified — each integration invented its own | a **normative two-handler delivery contract** wired to code every harness already ships (mid-turn input queues, user-facing tool cancellation) |
+| **Scope & authority** | flat | **logical projects**, default-deny grants, operator precedence, consent via MCP elicitation |
 
-v1 is retired. There is no migration path and none is needed: 2.0 keeps v1's semantics
-(priorities, acknowledgements, awareness, ownership) and replaces everything about how they
-move. The v1 repository remains archived as prior art.
+v1 is retired. There is no migration path and none is needed: 2.0 keeps v1's core
+semantics (priorities, acknowledgements, presence/awareness via the roster) and replaces
+everything about how messages move; v1's file-ownership and shared-memory extensions are
+deferred to future extension specs. The v1 repository remains
+[archived as prior art](https://github.com/multiagentcognition/macp-v1).
 
 ## How it works
 
@@ -39,7 +41,7 @@ move. The v1 repository remains archived as prior art.
 agent A (harness X) ──MCP──►┐
 agent B (harness Y) ──MCP──►│  MACP coordinator      registry: who's here, which project,
 agent C (harness Y) ──MCP──►│  (one MCP server        liveness, grants
-        human  ──── CLI ───►┘   per fleet)            inboxes: durable envelopes per agent
+  human operator ──────────►┘   per fleet)            inboxes: durable envelopes per agent
 ```
 
 Everything on the wire is standard MCP:
@@ -51,7 +53,8 @@ Everything on the wire is standard MCP:
 - **Receive** — the agent's inbox is a resource. New envelope → standard
   `notifications/resources/updated` → the harness reads the inbox and places the envelope into
   its **existing** mid-turn input queue → it is in the model's next request. If the envelope is
-  `interrupt`-priority, the harness first cancels the in-flight tool (its existing Esc path),
+  `interrupt`-priority, the harness first cancels the in-flight tool (its existing user-facing cancel
+  mechanism — e.g. the Esc key in CLI harnesses),
   keeping partial output — the boundary is created instead of awaited.
 - **Consent** — cross-project contact triggers MCP elicitation: the human approves once,
   always, or never. Agents cannot grant themselves authority over other agents.
@@ -66,8 +69,8 @@ agents think; any protocol delivering slower is polling.
 |---|---|---|
 | **L0 — tools-only** | add the coordinator to the MCP config. Zero harness changes | send, roster, poll — works on any MCP harness today |
 | **L1 — realtime via binding** | a plugin/extension/bridge maps inbox updates to the harness's input queue and abort path | full mid-turn delivery, no vendor cooperation needed |
-| **L2 — native** | the harness implements the two handlers itself (~50 lines against its existing queue + cancel machinery) | first-class delivery, better boundary coverage |
-| **L3 — symmetric** | the harness also *serves* MCP: `session.create`, `prompt {delivery}`, `interrupt`, transcript as a subscribable resource | any agent can be driven and observed by any other, cross-vendor |
+| **L2 — native** | the harness implements the two handlers itself — a small amount of glue against its existing queue + cancel machinery | first-class delivery, better boundary coverage |
+| **L3 — symmetric** | the harness also *serves* MCP: create-session, prompt with a delivery-mode parameter, interrupt, and a subscribable live transcript resource | any agent can be driven and observed by any other, cross-vendor |
 
 The `examples/` directory carries working L1 bindings for public harnesses — the standard is
 useful before any vendor adopts it, which is how standards win.
@@ -82,8 +85,8 @@ useful before any vendor adopts it, which is how standards win.
   channel.
 - **Default-deny authority.** Who may steer or interrupt whom is a grant recorded in the
   registry, enforced by the coordinator, auditable after the fact. The human outranks all grants.
-- **Rooms by default.** Messages stay inside a logical project unless a human opens a door —
-  by name, on the record.
+- **Project isolation by default.** Messages stay inside a logical project unless a human
+  opens a door — by name, on the record.
 
 ## Repository layout
 
