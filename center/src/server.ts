@@ -1,5 +1,5 @@
 /**
- * MACP 2.0 reference coordinator — per-session MCP server (spec §6).
+ * MACP 2.0 reference center — per-session MCP server (spec §6).
  * Tools: macp_register / macp_send / macp_ack / macp_roster / macp_grant.
  * Resources: macp://self · macp://project/{project}/roster · macp://agent/{address}/inbox.
  * All standard MCP: no custom methods, no custom notification types.
@@ -21,7 +21,7 @@ export interface SessionCtx {
 }
 
 /** Cross-session router: address → live session, for inbox update notifications. */
-export class Hub {
+export class Notifier {
   private byAddress = new Map<string, SessionCtx>();
 
   bind(ctx: SessionCtx): void {
@@ -48,9 +48,9 @@ export class Hub {
 
 const prioritySchema = z.enum(["interrupt", "steering", "advisory", "info"]);
 
-export function buildSessionServer(store: Store, hub: Hub, opts: { operatorToken: string | null }): SessionCtx {
+export function buildSessionServer(store: Store, notifier: Notifier, opts: { operatorToken: string | null }): SessionCtx {
   const server = new McpServer(
-    { name: "macp-coordinator", version: "0.1.0" },
+    { name: "macp-center", version: "0.1.0" },
     { capabilities: { resources: { subscribe: true, listChanged: true }, tools: {}, logging: {} } },
   );
 
@@ -90,7 +90,7 @@ export function buildSessionServer(store: Store, hub: Hub, opts: { operatorToken
         ctx.isOperator = true;
         ctx.address = `human://${args.agent_id}`;
         ctx.project = null;
-        hub.bind(ctx);
+        notifier.bind(ctx);
         store.audit(ctx.address, "register-operator", {});
         return ok_({ address: ctx.address, operator: true });
       }
@@ -110,7 +110,7 @@ export function buildSessionServer(store: Store, hub: Hub, opts: { operatorToken
       const project = resolveProject(args.project ?? null, ctx.roots);
       const address = `agent://${args.harness}/${args.agent_id}`;
 
-      hub.unbind(ctx);
+      notifier.unbind(ctx);
       ctx.address = address;
       ctx.project = project;
       const entry = store.register({
@@ -123,7 +123,7 @@ export function buildSessionServer(store: Store, hub: Hub, opts: { operatorToken
         conformance: args.conformance ?? null,
         endpoint: args.endpoint ?? null,
       });
-      hub.bind(ctx);
+      notifier.bind(ctx);
       return ok_({ address: entry.address, project: entry.project });
     },
   );
@@ -196,7 +196,7 @@ export function buildSessionServer(store: Store, hub: Hub, opts: { operatorToken
           body: args.body,
         });
         results.push(downgraded ? { id: env.id, to: env.to, priority, downgraded: true } : { id: env.id, to: env.to, priority });
-        void hub.notifyInbox(r.address);
+        void notifier.notifyInbox(r.address);
       }
       return ok_({ deliveries: results });
     },

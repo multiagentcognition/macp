@@ -9,7 +9,7 @@ tasks between agents *between* turns. **Nothing delivers a message into a runnin
 the quadrant where a reviewer stops a worker before the bug ships, where one sentence re-aims a
 fleet without a relaunch, where two agents negotiate a file conflict the moment it appears.
 
-MACP 2.0 fills that quadrant with the smallest possible ask: a coordinator that is **just an MCP
+MACP 2.0 fills that quadrant with the smallest possible ask: a center that is **just an MCP
 server**, and a delivery contract that harnesses wire to machinery they already have.
 
 ## A short history: v1 → 2.0
@@ -25,7 +25,7 @@ break rather than an upgrade:
 | | MACP v1 | MACP 2.0 |
 |---|---|---|
 | **Delivery** | poll — agents see messages when they choose to look; a worker deep in a 20-minute build sees nothing | **push at the inference boundary** — messages enter the agent's context before its next reasoning step; `interrupt` priority aborts the in-flight tool to create that boundary *now* |
-| **Transport & storage** | its own bus: a shared database file every agent writes | **standard MCP** — agents hold one ordinary outbound MCP connection to a coordinator; storage is the coordinator's private business |
+| **Transport & storage** | its own bus: a shared database file every agent writes | **standard MCP** — agents hold one ordinary outbound MCP connection to a center; storage is the center's private business |
 | **Harness integration** | unspecified — each integration invented its own | a **normative two-handler delivery contract** wired to code every harness already ships (mid-turn input queues, user-facing tool cancellation) |
 | **Scope & authority** | flat | **logical projects**, default-deny grants, operator precedence, consent via MCP elicitation |
 
@@ -39,7 +39,7 @@ deferred to future extension specs. The v1 repository remains
 
 ```
 agent A (harness X) ──MCP──►┐
-agent B (harness Y) ──MCP──►│  MACP coordinator      registry: who's here, which project,
+agent B (harness Y) ──MCP──►│  MACP center      registry: who's here, which project,
 agent C (harness Y) ──MCP──►│  (one MCP server        liveness, grants
   human operator ──────────►┘   per fleet)            inboxes: durable envelopes per agent
 ```
@@ -67,24 +67,26 @@ agents think; any protocol delivering slower is polling.
 
 | Level | What it takes | What you get |
 |---|---|---|
-| **L0 — tools-only** | add the coordinator to the MCP config. Zero harness changes | send, roster, poll — works on any MCP harness today |
+| **L0 — tools-only** | add the center to the MCP config. Zero harness changes | send, roster, poll — works on any MCP harness today |
 | **L1 — realtime via binding** | a plugin/extension/bridge maps inbox updates to the harness's input queue and abort path | full mid-turn delivery, no vendor cooperation needed |
 | **L2 — native** | the harness implements the two handlers itself — a small amount of glue against its existing queue + cancel machinery | first-class delivery, better boundary coverage |
 | **L3 — symmetric** | the harness also *serves* MCP: create-session, prompt with a delivery-mode parameter, interrupt, and a subscribable live transcript resource | any agent can be driven and observed by any other, cross-vendor |
 
 The `examples/` directory carries working L1 bindings for public harnesses — the standard is
-useful before any vendor adopts it, which is how standards win.
+useful before any vendor adopts it, which is how standards win. **[HARNESSES.md](HARNESSES.md)**
+maps each major harness's existing mid-turn queue + cancel machinery to its shortest path
+to L1, so no implementation ever falls back to v1-style pull.
 
 ## Security model
 
-- **No listening agents.** Agents hold one outbound MCP connection; the coordinator is the only
+- **No listening agents.** Agents hold one outbound MCP connection; the center is the only
   addressable thing, and in the default local deployment nothing is on the network at all.
 - **The channel cannot be forged.** Envelopes enter context only through the harness's own
   delivery channel. Text arriving through tool output — files, web pages, command results — is
   never promoted to a message, so prompt-injection payloads can imitate the words but never the
   channel.
 - **Default-deny authority.** Who may steer or interrupt whom is a grant recorded in the
-  registry, enforced by the coordinator, auditable after the fact. The human outranks all grants.
+  registry, enforced by the center, auditable after the fact. The human outranks all grants.
 - **Project isolation by default.** Messages stay inside a logical project unless a human
   opens a door — by name, on the record.
 
@@ -93,15 +95,16 @@ useful before any vendor adopts it, which is how standards win.
 ```
 spec/          MACP-2.0.md — the standard: envelope schema, delivery contract,
                scope resolution, grant model, conformance   +  spec/schemas/ (JSON Schema)
-coordinator/   reference implementation: one MCP server (streamable HTTP)
+center/        reference implementation: one MCP server (streamable HTTP)
+HARNESSES.md   per-harness implementation map: the push path to L1 for each major harness
 examples/      L1 bindings for public harnesses + an end-to-end cross-vendor demo
 conformance/   the conformance checklist and test suite
 ```
 
 ## Status
 
-**Draft — spec review round open.** Milestones: coordinator MVP → first cross-vendor demo
-(two different harnesses steering each other through one coordinator) → conformance suite
+**Draft — spec review round open.** Milestones: center MVP → first cross-vendor demo
+(two different harnesses steering each other through one center) → conformance suite
 v0.1 → symmetric-channel (L3) spec draft.
 
 Contributions, harness bindings, and spec review are welcome — open an issue or a discussion.

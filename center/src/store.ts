@@ -1,5 +1,5 @@
 /**
- * MACP 2.0 reference coordinator — store.
+ * MACP 2.0 reference center — store.
  *
  * Storage is implementation-private per spec §3; this reference uses an
  * embedded SQLite database (node:sqlite, no native build step). Any backend

@@ -1,7 +1,7 @@
 {
-  "name": "macp-coordinator",
+  "name": "macp-center",
   "version": "0.1.0",
-  "description": "MACP 2.0 reference coordinator — an MCP server (streamable HTTP)",
+  "description": "MACP 2.0 reference center — an MCP server (streamable HTTP)",
   "main": "dist/index.js",
   "directories": {
     "test": "test"
@@ -24,6 +24,6 @@
     "typescript": "^7.0.2"
   },
   "bin": {
-    "macp-coordinator": "dist/index.js"
+    "macp-center": "dist/index.js"
   }
 }

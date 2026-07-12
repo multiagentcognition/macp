@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://macp.dev/schemas/2.0/envelope.schema.json",
   "title": "MACP 2.0 Envelope",
-  "description": "One message from one agent (or the human operator) to one recipient. The inbox resource (macp://agent/{address}/inbox) is a JSON array of these, priority-ordered. All fields except 'body' are provenance, authored by the coordinator/binding — never by the sending model (spec §7.3).",
+  "description": "One message from one agent (or the human operator) to one recipient. The inbox resource (macp://agent/{address}/inbox) is a JSON array of these, priority-ordered. All fields except 'body' are provenance, authored by the center/binding — never by the sending model (spec §7.3).",
   "type": "object",
   "required": ["macp", "id", "from", "to", "project", "priority", "sent_at", "ack", "body"],
   "additionalProperties": false,
@@ -14,16 +14,16 @@
     },
     "id": {
       "type": "string",
-      "description": "Coordinator-assigned delivery ID, unique per (envelope × recipient). Idempotency key for interrupt handling (spec §8.3 I5).",
+      "description": "Center-assigned delivery ID, unique per (envelope × recipient). Idempotency key for interrupt handling (spec §8.3 I5).",
       "minLength": 1
     },
     "from": {
       "$ref": "#/$defs/address",
-      "description": "Sender address. The coordinator MUST set this from the authenticated connection; senders cannot spoof it."
+      "description": "Sender address. The center MUST set this from the authenticated connection; senders cannot spoof it."
     },
     "to": {
       "$ref": "#/$defs/address",
-      "description": "Recipient address. For broadcasts the coordinator fans out one envelope per recipient, each with its own id."
+      "description": "Recipient address. For broadcasts the center fans out one envelope per recipient, each with its own id."
     },
     "project": {
       "type": "string",
@@ -38,7 +38,7 @@
     "sent_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Coordinator receive timestamp, UTC."
+      "description": "Center receive timestamp, UTC."
     },
     "ack": {
       "type": "string",

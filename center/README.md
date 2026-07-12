@@ -1,7 +1,7 @@
-# macp-coordinator
+# macp-center
 
-The MACP 2.0 **reference coordinator** — one MCP server (streamable HTTP) per fleet.
-Implements the coordinator surface of [the spec](../spec/MACP-2.0.md) §6: registration via
+The MACP 2.0 **reference center** — one MCP server (streamable HTTP) per fleet.
+Implements the center surface of [the spec](../spec/MACP-2.0.md) §6: registration via
 the MCP handshake, the five `macp_*` tools, the three `macp://` resources with
 subscription push, default-deny grants, and a durable per-agent inbox.
 
@@ -18,7 +18,7 @@ npm start                       # http://localhost:7737/mcp, db ./macp.db
 
 Optional: `MACP_OPERATOR_TOKEN=<secret>` — when set, operator registration
 (`harness: "operator"`) requires the matching `operator_token`. When unset, the
-coordinator trusts local operator registration (single-machine default).
+center trusts local operator registration (single-machine default).
 
 ## Connect an agent (any MCP client)
 
@@ -45,7 +45,7 @@ Then, from the agent (L0 — tools-only, works on any MCP harness today):
 ## Test
 
 ```bash
-npm test    # end-to-end smoke: boots a coordinator, drives 4 MCP clients through
+npm test    # end-to-end smoke: boots a center, drives 4 MCP clients through
             # register/roster/send/inbox/ack, subscription push, grant + downgrade,
             # self-grant refusal, inbox isolation, offline durability, project isolation
 ```

@@ -1,16 +1,16 @@
 /**
- * MACP 2.0 reference coordinator — HTTP host.
+ * MACP 2.0 reference center — HTTP host.
  * One long-lived process serving MCP over streamable HTTP (spec §3):
  * every agent in the fleet connects to the same URL; each MCP session is one agent.
  *
- *   macp-coordinator [--port 7737] [--db ./macp.db]
+ *   macp-center [--port 7737] [--db ./macp.db]
  *   MACP_OPERATOR_TOKEN=…   optional; when set, operator registration requires it.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Store } from "./store.js";
-import { Hub, buildSessionServer, type SessionCtx } from "./server.js";
+import { Notifier, buildSessionServer, type SessionCtx } from "./server.js";
 
 const args = process.argv.slice(2);
 const flag = (name: string, dflt: string) => {
@@ -23,7 +23,7 @@ const DB = flag("db", process.env.MACP_DB ?? "./macp.db");
 const OPERATOR_TOKEN = process.env.MACP_OPERATOR_TOKEN ?? null;
 
 const store = new Store(DB);
-const hub = new Hub();
+const notifier = new Notifier();
 
 interface Session {
   transport: StreamableHTTPServerTransport;
@@ -34,7 +34,7 @@ const sessions = new Map<string, Session>();
 async function handle(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   if (url.pathname !== "/mcp") {
-    res.writeHead(404).end("MACP coordinator: MCP endpoint is /mcp");
+    res.writeHead(404).end("MACP center: MCP endpoint is /mcp");
     return;
   }
 
@@ -51,7 +51,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 
   // New session → new transport + per-session MCP server.
   if (req.method === "POST") {
-    const ctx = buildSessionServer(store, hub, { operatorToken: OPERATOR_TOKEN });
+    const ctx = buildSessionServer(store, notifier, { operatorToken: OPERATOR_TOKEN });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
@@ -74,7 +74,7 @@ function endSession(id: string) {
   const s = sessions.get(id);
   if (!s) return;
   sessions.delete(id);
-  hub.unbind(s.ctx);
+  notifier.unbind(s.ctx);
   if (s.ctx.address && !s.ctx.isOperator) store.markStale(s.ctx.address); // spec §5.2 — inbox retained
 }
 
@@ -86,7 +86,7 @@ const httpServer = createServer((req, res) => {
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`MACP coordinator listening on http://localhost:${PORT}/mcp (db: ${DB})`);
+  console.log(`MACP center listening on http://localhost:${PORT}/mcp (db: ${DB})`);
 });
 
 process.on("SIGINT", () => {

@@ -1,10 +1,10 @@
 /**
- * End-to-end smoke test against a live coordinator over streamable HTTP.
+ * End-to-end smoke test against a live center over streamable HTTP.
  * Exercises: registration + scope, roster, advisory send → inbox → ack,
  * default-deny downgrade, operator grant, granted steering, subscription
  * push (notifications/resources/updated), and durable offline delivery.
  *
- * Run: node test/smoke.mjs   (starts its own coordinator on a random port)
+ * Run: node test/smoke.mjs   (starts its own center on a random port)
  */
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
@@ -27,14 +27,14 @@ async function connect(name) {
   return client;
 }
 
-// ── boot coordinator ─────────────────────────────────────────────────────
+// ── boot center ─────────────────────────────────────────────────────
 rmSync(DB, { force: true });
 const proc = spawn("node", ["dist/index.js", "--port", String(PORT), "--db", DB], { stdio: ["ignore", "pipe", "pipe"] });
 proc.stderr.on("data", (d) => process.stderr.write(d));
 await new Promise((resolve, reject) => {
   proc.stdout.on("data", (d) => d.toString().includes("listening") && resolve());
-  proc.on("exit", (c) => reject(new Error(`coordinator exited early (${c})`)));
-  setTimeout(() => reject(new Error("coordinator boot timeout")), 8000);
+  proc.on("exit", (c) => reject(new Error(`center exited early (${c})`)));
+  setTimeout(() => reject(new Error("center boot timeout")), 8000);
 });
 
 try {
